@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,23 @@ func (it *stubIterator) Next(ctx context.Context) (export.Row, error) {
 }
 
 func (it *stubIterator) Close() error { return nil }
+
+type denyDownloadGuard struct{}
+
+func (denyDownloadGuard) AuthorizeExport(ctx context.Context, actor export.Actor, req export.ExportRequest, def export.ResolvedDefinition) error {
+	_ = ctx
+	_ = actor
+	_ = req
+	_ = def
+	return nil
+}
+
+func (denyDownloadGuard) AuthorizeDownload(ctx context.Context, actor export.Actor, exportID string) error {
+	_ = ctx
+	_ = actor
+	_ = exportID
+	return errors.New("denied")
+}
 
 func newTestRunner(t *testing.T) *export.Runner {
 	t.Helper()
@@ -162,5 +180,48 @@ func TestHandler_AsyncIdempotencyAndDownload(t *testing.T) {
 	}
 	if !strings.Contains(downloadRec.Body.String(), "id,name") {
 		t.Fatalf("expected csv content, got %q", downloadRec.Body.String())
+	}
+}
+
+func TestHandler_DownloadGuardRejects(t *testing.T) {
+	runner := newTestRunner(t)
+	tracker := export.NewMemoryTracker()
+	store := export.NewMemoryStore()
+	svc := export.NewService(export.ServiceConfig{
+		Runner:  runner,
+		Tracker: tracker,
+		Store:   store,
+		Guard:   denyDownloadGuard{},
+	})
+
+	ref, err := store.Put(context.Background(), "exports/exp-guard.csv", bytes.NewBufferString("id,name\n1,alice\n"), export.ArtifactMeta{
+		Filename:    "users.csv",
+		ContentType: "text/csv",
+	})
+	if err != nil {
+		t.Fatalf("store put: %v", err)
+	}
+	if _, err := tracker.Start(context.Background(), export.ExportRecord{
+		ID:         "exp-guard",
+		Definition: "users",
+		Format:     export.FormatCSV,
+		State:      export.StateCompleted,
+		Artifact:   ref,
+	}); err != nil {
+		t.Fatalf("tracker start: %v", err)
+	}
+
+	handler := NewHandler(Config{
+		Service:       svc,
+		Store:         store,
+		ActorProvider: StaticActorProvider{Actor: export.Actor{ID: "user-1"}},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/exports/exp-guard/download", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
 	}
 }
