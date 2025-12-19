@@ -1,0 +1,12 @@
+{
+  "filters": [
+    { "field": "status", "op": "eq", "value": "active" }
+  ],
+  "search": "alice",
+  "sort": [
+    { "field": "created_at", "desc": true }
+  ],
+  "cursor": "next",
+  "limit": 25,
+  "offset": 0
+}
