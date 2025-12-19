@@ -152,7 +152,10 @@ func TestTracker_ArtifactUpdateDelete(t *testing.T) {
 
 func newTestDB(t *testing.T) *bun.DB {
 	t.Helper()
-	sqldb := sql.OpenDB(sqliteshim.NewConnector("file::memory:?cache=shared"))
+	sqldb, err := sql.Open(sqliteshim.ShimName, "file::memory:?cache=shared")
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
 	db := bun.NewDB(sqldb, sqlitedialect.New())
 	t.Cleanup(func() {
 		_ = db.Close()

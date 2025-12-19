@@ -319,7 +319,7 @@ func TestGenerateTask_RetriesRetryableErrors(t *testing.T) {
 			Strategy: job.BackoffNone,
 		},
 	}
-	ask := NewGenerateTask(TaskConfig{
+	task := NewGenerateTask(TaskConfig{
 		RetryPolicy: policy,
 		Store:       store,
 		Dispatch: func(ctx context.Context, msg exportcmd.GenerateExport) error {
