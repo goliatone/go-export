@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
 	"time"
 
 	"github.com/goliatone/go-command/dispatcher"
@@ -258,6 +259,13 @@ func artifactKey(exportID string, format export.Format) string {
 func isNotFoundError(err error) bool {
 	var exportErr *export.ExportError
 	if errors.As(err, &exportErr) && exportErr.Kind == export.KindNotFound {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return true
+	}
+	var goErr *errorslib.Error
+	if errors.As(err, &goErr) && goErr.Category == errorslib.CategoryNotFound {
 		return true
 	}
 	return false
