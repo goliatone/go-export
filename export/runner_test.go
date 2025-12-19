@@ -219,6 +219,43 @@ func TestRunner_EndToEndFormats(t *testing.T) {
 	}
 }
 
+func TestRunner_EndToEndXLSX(t *testing.T) {
+	buf := &bytes.Buffer{}
+	iter := &stubIterator{rows: []Row{{"1", "alice"}}}
+	source := &stubSource{iter: iter}
+
+	runner := NewRunner()
+	if err := runner.Definitions.Register(ExportDefinition{
+		Name:         "users",
+		RowSourceKey: "stub",
+		Schema: Schema{Columns: []Column{
+			{Name: "id"},
+			{Name: "name"},
+		}},
+	}); err != nil {
+		t.Fatalf("register definition: %v", err)
+	}
+	if err := runner.RowSources.Register("stub", func(req ExportRequest, def ResolvedDefinition) (RowSource, error) {
+		_ = req
+		_ = def
+		return source, nil
+	}); err != nil {
+		t.Fatalf("register source: %v", err)
+	}
+
+	_, err := runner.Run(context.Background(), ExportRequest{
+		Definition: "users",
+		Format:     FormatXLSX,
+		Output:     buf,
+	})
+	if err != nil {
+		t.Fatalf("run xlsx: %v", err)
+	}
+	if buf.Len() == 0 {
+		t.Fatalf("expected xlsx output")
+	}
+}
+
 func TestRunner_ContextCancelStopsIteration(t *testing.T) {
 	iter := &blockingIterator{}
 	source := &stubSource{iter: iter}

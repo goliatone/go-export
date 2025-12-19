@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -86,4 +87,48 @@ func TestRunner_RedactsColumns(t *testing.T) {
 
 func testNow() time.Time {
 	return time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+}
+
+func TestRunner_CSVHeadersOptOut(t *testing.T) {
+	buf := &bytes.Buffer{}
+	iter := &stubIterator{rows: []Row{{"1", "alice"}}}
+
+	runner := NewRunner()
+	if err := runner.Definitions.Register(ExportDefinition{
+		Name:         "users",
+		RowSourceKey: "stub",
+		Schema: Schema{Columns: []Column{
+			{Name: "id"},
+			{Name: "name"},
+		}},
+	}); err != nil {
+		t.Fatalf("register definition: %v", err)
+	}
+	if err := runner.RowSources.Register("stub", func(req ExportRequest, def ResolvedDefinition) (RowSource, error) {
+		_ = req
+		_ = def
+		return &stubSource{iter: iter}, nil
+	}); err != nil {
+		t.Fatalf("register source: %v", err)
+	}
+
+	_, err := runner.Run(context.Background(), ExportRequest{
+		Definition: "users",
+		Format:     FormatCSV,
+		Output:     buf,
+		RenderOptions: RenderOptions{
+			CSV: CSVOptions{
+				IncludeHeaders: false,
+				HeadersSet:     true,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 1 || lines[0] != "1,alice" {
+		t.Fatalf("expected csv without headers, got %q", buf.String())
+	}
 }
