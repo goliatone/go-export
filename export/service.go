@@ -498,7 +498,7 @@ func (s *service) requestAsync(ctx context.Context, actor Actor, resolved Resolv
 	}
 
 	if s.runner != nil && s.runner.Retention != nil {
-		ttl, err := s.runner.Retention.TTL(ctx, resolved.Request, resolved.Definition)
+		ttl, err := s.runner.Retention.TTL(ctx, actor, resolved.Request, resolved.Definition)
 		if err != nil {
 			return ExportRecord{}, AsGoError(err)
 		}
