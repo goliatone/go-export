@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -46,6 +47,7 @@ type ServiceConfig struct {
 	Guard          Guard
 	DeliveryPolicy DeliveryPolicy
 	DeleteStrategy DeleteStrategy
+	CancelHook     CancelHook
 	Now            func() time.Time
 	IDGenerator    func() string
 }
@@ -57,6 +59,7 @@ type service struct {
 	guard          Guard
 	deliveryPolicy DeliveryPolicy
 	deleteStrategy DeleteStrategy
+	cancelHook     CancelHook
 	now            func() time.Time
 	idGenerator    func() string
 }
@@ -121,6 +124,7 @@ func NewService(cfg ServiceConfig) Service {
 		guard:          guard,
 		deliveryPolicy: policy,
 		deleteStrategy: deleteStrategy,
+		cancelHook:     cfg.CancelHook,
 		now:            nowFn,
 		idGenerator:    idGen,
 	}
@@ -250,10 +254,29 @@ func (s *service) CancelExport(ctx context.Context, actor Actor, exportID string
 		return ExportRecord{}, err
 	}
 
-	if err := s.tracker.SetState(ctx, exportID, StateCanceled, nil); err != nil {
+	record, err := s.tracker.Status(ctx, exportID)
+	if err != nil {
 		return ExportRecord{}, AsGoError(err)
 	}
-	record, err := s.tracker.Status(ctx, exportID)
+
+	if !isCancelableState(record.State) {
+		return record, nil
+	}
+
+	if s.cancelHook != nil {
+		if err := s.cancelHook.Cancel(ctx, exportID); err != nil && !isIgnorableCancelError(err) {
+			return ExportRecord{}, AsGoError(err)
+		}
+	}
+
+	meta := map[string]any{
+		"canceled_at": s.now(),
+		"canceled_by": actor.ID,
+	}
+	if err := s.tracker.SetState(ctx, exportID, StateCanceled, meta); err != nil {
+		return ExportRecord{}, AsGoError(err)
+	}
+	record, err = s.tracker.Status(ctx, exportID)
 	if err != nil {
 		return ExportRecord{}, AsGoError(err)
 	}
@@ -758,6 +781,26 @@ func isZeroDeliveryPolicy(policy DeliveryPolicy) bool {
 		policy.Thresholds.MaxRows == 0 &&
 		policy.Thresholds.MaxBytes == 0 &&
 		policy.Thresholds.MaxDuration == 0
+}
+
+func isCancelableState(state ExportState) bool {
+	switch state {
+	case StateQueued, StateRunning, StatePublishing:
+		return true
+	default:
+		return false
+	}
+}
+
+func isIgnorableCancelError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var exportErr *ExportError
+	if errors.As(err, &exportErr) && exportErr.Kind == KindNotFound {
+		return true
+	}
+	return false
 }
 
 func contentTypeForFormat(format Format) string {
