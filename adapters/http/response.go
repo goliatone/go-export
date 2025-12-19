@@ -1,17 +1,9 @@
 package exporthttp
 
-// asyncResponse describes async export responses.
-type asyncResponse struct {
-	ID          string `json:"id"`
-	StatusURL   string `json:"status_url"`
-	DownloadURL string `json:"download_url"`
-}
+import "github.com/goliatone/go-export/adapters/exportapi"
 
-type errorResponse struct {
-	Error errorBody `json:"error"`
-}
+type asyncResponse = exportapi.AsyncResponse
 
-type errorBody struct {
-	Message string `json:"message"`
-	Code    string `json:"code,omitempty"`
-}
+type errorResponse = exportapi.ErrorResponse
+
+type errorBody = exportapi.ErrorBody
