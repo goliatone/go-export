@@ -1,0 +1,337 @@
+package export
+
+import (
+	"context"
+	"io"
+	"time"
+)
+
+// Format is the export output format.
+type Format string
+
+const (
+	FormatCSV    Format = "csv"
+	FormatJSON   Format = "json"
+	FormatNDJSON Format = "ndjson"
+)
+
+// DeliveryMode describes how exports are delivered.
+type DeliveryMode string
+
+const (
+	DeliverySync  DeliveryMode = "sync"
+	DeliveryAsync DeliveryMode = "async"
+	DeliveryAuto  DeliveryMode = "auto"
+)
+
+// SelectionMode describes how rows are selected.
+type SelectionMode string
+
+const (
+	SelectionAll SelectionMode = "all"
+	SelectionIDs SelectionMode = "ids"
+)
+
+// Selection captures row selection intent.
+type Selection struct {
+	Mode SelectionMode
+	IDs  []string
+}
+
+// ExportRequest captures an export request.
+type ExportRequest struct {
+	Definition        string
+	SourceVariant     string
+	Format            Format
+	Query             any
+	Selection         Selection
+	Columns           []string
+	Locale            string
+	Timezone          string
+	Delivery          DeliveryMode
+	IdempotencyKey    string
+	EstimatedRows     int
+	EstimatedBytes    int64
+	EstimatedDuration time.Duration
+	Output            io.Writer
+	RenderOptions     RenderOptions
+}
+
+// ExportDefinition declares an exportable dataset.
+type ExportDefinition struct {
+	Name            string
+	Resource        string
+	Schema          Schema
+	AllowedFormats  []Format
+	DefaultFilename string
+	RowSourceKey    string
+	SourceVariants  map[string]SourceVariant
+	Policy          ExportPolicy
+	DeliveryPolicy  *DeliveryPolicy
+}
+
+// SourceVariant allows alternate sources and policy overrides.
+type SourceVariant struct {
+	RowSourceKey    string
+	AllowedFormats  []Format
+	DefaultFilename string
+	Policy          *ExportPolicy
+}
+
+// ExportPolicy enforces export limits and redaction.
+type ExportPolicy struct {
+	AllowedColumns []string
+	RedactColumns  []string
+	RedactionValue any
+	MaxRows        int
+	MaxBytes       int64
+	MaxDuration    time.Duration
+}
+
+// DeliveryPolicy configures delivery selection thresholds.
+type DeliveryPolicy struct {
+	Default    DeliveryMode
+	Thresholds DeliveryThresholds
+}
+
+// DeliveryThresholds drive auto delivery decisions.
+type DeliveryThresholds struct {
+	MaxRows     int
+	MaxBytes    int64
+	MaxDuration time.Duration
+}
+
+// Column defines a column in the export schema.
+type Column struct {
+	Name  string
+	Label string
+	Type  string
+}
+
+// Schema defines the columns for a dataset.
+type Schema struct {
+	Columns []Column
+}
+
+// ExportCounts tracks row counts.
+type ExportCounts struct {
+	Processed int64
+	Total     int64
+	Errors    int64
+}
+
+// ExportState captures progress states.
+type ExportState string
+
+const (
+	StateQueued     ExportState = "queued"
+	StateRunning    ExportState = "running"
+	StatePublishing ExportState = "publishing"
+	StateCompleted  ExportState = "completed"
+	StateFailed     ExportState = "failed"
+	StateCanceled   ExportState = "canceled"
+)
+
+// ExportRecord captures tracker state for an export.
+type ExportRecord struct {
+	ID           string
+	Definition   string
+	Format       Format
+	State        ExportState
+	RequestedBy  Actor
+	Scope        Scope
+	Counts       ExportCounts
+	BytesWritten int64
+	Artifact     ArtifactRef
+	CreatedAt    time.Time
+	StartedAt    time.Time
+	CompletedAt  time.Time
+	ExpiresAt    time.Time
+}
+
+// Actor identifies the requesting principal.
+type Actor struct {
+	ID      string
+	Scope   Scope
+	Details map[string]any
+}
+
+// Scope identifies tenant/workspace scope.
+type Scope struct {
+	TenantID    string
+	WorkspaceID string
+}
+
+// ExportResult captures a completed export.
+type ExportResult struct {
+	ID       string
+	Delivery DeliveryMode
+	Format   Format
+	Rows     int64
+	Bytes    int64
+	Filename string
+	Artifact *ArtifactRef
+}
+
+// Row is a column-aligned record.
+type Row []any
+
+// RowSourceSpec is passed to RowSource.Open.
+type RowSourceSpec struct {
+	Definition ResolvedDefinition
+	Request    ExportRequest
+	Columns    []Column
+	Actor      Actor
+}
+
+// RowSource provides row iterators for exports.
+type RowSource interface {
+	Open(ctx context.Context, spec RowSourceSpec) (RowIterator, error)
+}
+
+// RowIterator streams rows.
+type RowIterator interface {
+	Next(ctx context.Context) (Row, error)
+	Close() error
+}
+
+// Renderer writes rows to the destination.
+type Renderer interface {
+	Render(ctx context.Context, schema Schema, rows RowIterator, w io.Writer, opts RenderOptions) (RenderStats, error)
+}
+
+// RenderStats capture renderer output.
+type RenderStats struct {
+	Rows  int64
+	Bytes int64
+}
+
+// JSONMode configures JSON rendering.
+type JSONMode string
+
+const (
+	JSONModeArray  JSONMode = "array"
+	JSONModeLines  JSONMode = "ndjson"
+	JSONModeObject JSONMode = "object"
+)
+
+// CSVOptions configures CSV output.
+type CSVOptions struct {
+	IncludeHeaders bool
+	Delimiter      rune
+}
+
+// JSONOptions configures JSON output.
+type JSONOptions struct {
+	Mode JSONMode
+}
+
+// RenderOptions configures renderer behavior.
+type RenderOptions struct {
+	CSV  CSVOptions
+	JSON JSONOptions
+}
+
+// ArtifactMeta captures stored artifact metadata.
+type ArtifactMeta struct {
+	ContentType string
+	Size        int64
+	Filename    string
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+}
+
+// ArtifactRef references a stored artifact.
+type ArtifactRef struct {
+	Key  string
+	Meta ArtifactMeta
+}
+
+// ArtifactStore stores export artifacts.
+type ArtifactStore interface {
+	Put(ctx context.Context, key string, r io.Reader, meta ArtifactMeta) (ArtifactRef, error)
+	Open(ctx context.Context, key string) (io.ReadCloser, ArtifactMeta, error)
+	Delete(ctx context.Context, key string) error
+	SignedURL(ctx context.Context, key string, ttl time.Duration) (string, error)
+}
+
+// ProgressDelta indicates progress changes.
+type ProgressDelta struct {
+	Rows  int64
+	Bytes int64
+}
+
+// ProgressTracker tracks export progress.
+type ProgressTracker interface {
+	Start(ctx context.Context, record ExportRecord) (string, error)
+	Advance(ctx context.Context, id string, delta ProgressDelta, meta map[string]any) error
+	SetState(ctx context.Context, id string, state ExportState, meta map[string]any) error
+	Fail(ctx context.Context, id string, err error, meta map[string]any) error
+	Complete(ctx context.Context, id string, meta map[string]any) error
+	Status(ctx context.Context, id string) (ExportRecord, error)
+	List(ctx context.Context, filter ProgressFilter) ([]ExportRecord, error)
+}
+
+// ProgressFilter filters tracker lists.
+type ProgressFilter struct {
+	Definition string
+	State      ExportState
+	Since      time.Time
+	Until      time.Time
+}
+
+// Guard enforces authorization.
+type Guard interface {
+	AuthorizeExport(ctx context.Context, actor Actor, req ExportRequest, def ResolvedDefinition) error
+	AuthorizeDownload(ctx context.Context, actor Actor, exportID string) error
+}
+
+// ActorProvider extracts the actor from context.
+type ActorProvider interface {
+	FromContext(ctx context.Context) (Actor, error)
+}
+
+// Logger provides logging hooks.
+type Logger interface {
+	Debugf(format string, args ...any)
+	Infof(format string, args ...any)
+	Errorf(format string, args ...any)
+}
+
+// ChangeEvent describes lifecycle events.
+type ChangeEvent struct {
+	Name      string
+	ExportID  string
+	Timestamp time.Time
+	Metadata  map[string]any
+}
+
+// ChangeEmitter emits lifecycle events.
+type ChangeEmitter interface {
+	Emit(ctx context.Context, evt ChangeEvent) error
+}
+
+// RouterRegistrar provides optional route registration.
+type RouterRegistrar interface {
+	RegisterRoutes(router any)
+}
+
+// QuotaHook enforces limits beyond per-definition policy.
+type QuotaHook interface {
+	Allow(ctx context.Context, req ExportRequest, def ResolvedDefinition) error
+}
+
+// RetentionPolicy decides artifact TTLs.
+type RetentionPolicy interface {
+	TTL(ctx context.Context, req ExportRequest, def ResolvedDefinition) (time.Duration, error)
+}
+
+// ResolvedDefinition is a definition with variant overrides applied.
+type ResolvedDefinition struct {
+	ExportDefinition
+	RowSourceKey    string
+	AllowedFormats  []Format
+	DefaultFilename string
+	Policy          ExportPolicy
+	Variant         string
+}
