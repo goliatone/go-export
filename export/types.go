@@ -164,6 +164,7 @@ type ExportRecord struct {
 type Actor struct {
 	ID      string
 	Scope   Scope
+	Roles   []string
 	Details map[string]any
 }
 
@@ -367,7 +368,7 @@ type QuotaHook interface {
 
 // RetentionPolicy decides artifact TTLs.
 type RetentionPolicy interface {
-	TTL(ctx context.Context, req ExportRequest, def ResolvedDefinition) (time.Duration, error)
+	TTL(ctx context.Context, actor Actor, req ExportRequest, def ResolvedDefinition) (time.Duration, error)
 }
 
 // ResolvedDefinition is a definition with variant overrides applied.
