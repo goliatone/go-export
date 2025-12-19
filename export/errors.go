@@ -89,3 +89,24 @@ func AsGoError(err error) *errorslib.Error {
 		return errorslib.New(msg, errorslib.CategoryInternal).WithTextCode("internal")
 	}
 }
+
+// KindFromError maps an error to its export error kind.
+func KindFromError(err error) ErrorKind {
+	if err == nil {
+		return ""
+	}
+
+	var exportErr *ExportError
+	if errors.As(err, &exportErr) {
+		return exportErr.Kind
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return KindTimeout
+	}
+	if errors.Is(err, context.Canceled) {
+		return KindCanceled
+	}
+
+	return KindInternal
+}
