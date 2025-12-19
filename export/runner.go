@@ -20,6 +20,7 @@ type Runner struct {
 	ActorProvider  ActorProvider
 	Logger         Logger
 	Emitter        ChangeEmitter
+	Metrics        MetricsHook
 	QuotaHook      QuotaHook
 	Retention      RetentionPolicy
 	DeliveryPolicy DeliveryPolicy
@@ -97,9 +98,19 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 	}
 
 	if r.QuotaHook != nil {
-		if err := r.QuotaHook.Allow(ctx, resolved.Request, resolved.Definition); err != nil {
+		if err := r.QuotaHook.Allow(ctx, actor, resolved.Request, resolved.Definition); err != nil {
 			return ExportResult{}, AsGoError(err)
 		}
+	}
+
+	ctx, cancel := applyMaxDuration(ctx, r.Now, resolved.Definition.Policy.MaxDuration)
+	if cancel != nil {
+		defer cancel()
+	}
+
+	runReq := resolved.Request
+	if resolved.Definition.Policy.MaxBytes > 0 {
+		runReq.Output = newLimitedWriter(runReq.Output, resolved.Definition.Policy.MaxBytes)
 	}
 
 	exportID := r.IDGenerator()
@@ -107,7 +118,7 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 		record := ExportRecord{
 			ID:          exportID,
 			Definition:  resolved.Definition.Name,
-			Format:      resolved.Request.Format,
+			Format:      runReq.Format,
 			State:       StateQueued,
 			RequestedBy: actor,
 			Scope:       actor.Scope,
@@ -123,53 +134,55 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 		_ = r.Tracker.SetState(ctx, exportID, StateRunning, nil)
 	}
 
-	r.emit(ctx, "export.requested", exportID, nil)
-	r.emit(ctx, "export.started", exportID, nil)
+	runInfo := buildRunInfo(exportID, resolved, actor, delivery, r.Now)
+	r.emit(ctx, runInfo, "export.requested", nil)
+	r.emitMetrics(ctx, runInfo, "export.requested", RenderStats{}, nil)
+	r.emit(ctx, runInfo, "export.started", nil)
 
 	factory, ok := r.RowSources.Resolve(resolved.Definition.RowSourceKey)
 	if !ok {
 		err := NewError(KindNotFound, fmt.Sprintf("row source %q not registered", resolved.Definition.RowSourceKey), nil)
-		r.fail(ctx, exportID, err)
+		r.fail(ctx, runInfo, err)
 		return ExportResult{}, AsGoError(err)
 	}
 
-	source, err := factory(resolved.Request, resolved.Definition)
+	source, err := factory(runReq, resolved.Definition)
 	if err != nil {
-		r.fail(ctx, exportID, err)
+		r.fail(ctx, runInfo, err)
 		return ExportResult{}, AsGoError(err)
 	}
 
 	iterator, err := source.Open(ctx, RowSourceSpec{
 		Definition: resolved.Definition,
-		Request:    resolved.Request,
+		Request:    runReq,
 		Columns:    resolved.Columns,
 		Actor:      actor,
 	})
 	if err != nil {
-		r.fail(ctx, exportID, err)
+		r.fail(ctx, runInfo, err)
 		return ExportResult{}, AsGoError(err)
 	}
 	defer iterator.Close()
 
 	tracked := newTrackingIterator(iterator, resolved, r.Tracker, exportID)
 
-	renderer, ok := r.Renderers.Resolve(resolved.Request.Format)
+	renderer, ok := r.Renderers.Resolve(runReq.Format)
 	if !ok {
-		err := NewError(KindNotFound, fmt.Sprintf("renderer %q not registered", resolved.Request.Format), nil)
-		r.fail(ctx, exportID, err)
+		err := NewError(KindNotFound, fmt.Sprintf("renderer %q not registered", runReq.Format), nil)
+		r.fail(ctx, runInfo, err)
 		return ExportResult{}, AsGoError(err)
 	}
 
-	stats, err := renderer.Render(ctx, Schema{Columns: resolved.Columns}, tracked, resolved.Request.Output, resolved.Request.RenderOptions)
+	stats, err := renderer.Render(ctx, Schema{Columns: resolved.Columns}, tracked, runReq.Output, runReq.RenderOptions)
 	if err != nil {
-		r.fail(ctx, exportID, err)
+		r.fail(ctx, runInfo, err)
 		return ExportResult{}, AsGoError(err)
 	}
 
 	result := ExportResult{
 		ID:       exportID,
 		Delivery: delivery,
-		Format:   resolved.Request.Format,
+		Format:   runReq.Format,
 		Rows:     stats.Rows,
 		Bytes:    stats.Bytes,
 		Filename: resolved.Filename,
@@ -182,43 +195,154 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 		})
 	}
 
-	r.emit(ctx, "export.completed", exportID, map[string]any{
-		"rows":  stats.Rows,
-		"bytes": stats.Bytes,
+	r.emit(ctx, runInfo, "export.completed", map[string]any{
+		"rows":     stats.Rows,
+		"bytes":    stats.Bytes,
+		"duration": r.Now().Sub(runInfo.startedAt),
 	})
+	r.emitMetrics(ctx, runInfo, "export.completed", stats, nil)
 
 	return result, nil
 }
 
-func (r *Runner) fail(ctx context.Context, exportID string, err error) {
-	if exportID == "" {
+func (r *Runner) fail(ctx context.Context, runInfo runInfo, err error) {
+	if runInfo.exportID == "" {
 		return
 	}
 
 	if errors.Is(err, context.Canceled) {
 		if r.Tracker != nil {
-			_ = r.Tracker.SetState(ctx, exportID, StateCanceled, nil)
+			_ = r.Tracker.SetState(ctx, runInfo.exportID, StateCanceled, nil)
 		}
-		r.emit(ctx, "export.canceled", exportID, nil)
+		r.emit(ctx, runInfo, "export.canceled", map[string]any{
+			"duration": r.Now().Sub(runInfo.startedAt),
+		})
+		r.emitMetrics(ctx, runInfo, "export.canceled", RenderStats{}, err)
 		return
 	}
 
 	if r.Tracker != nil {
-		_ = r.Tracker.Fail(ctx, exportID, err, nil)
+		_ = r.Tracker.Fail(ctx, runInfo.exportID, err, nil)
 	}
-	r.emit(ctx, "export.failed", exportID, map[string]any{"error": err.Error()})
+	r.emit(ctx, runInfo, "export.failed", map[string]any{
+		"error":      err.Error(),
+		"error_kind": KindFromError(err),
+		"duration":   r.Now().Sub(runInfo.startedAt),
+	})
+	r.emitMetrics(ctx, runInfo, "export.failed", RenderStats{}, err)
 }
 
-func (r *Runner) emit(ctx context.Context, name, exportID string, meta map[string]any) {
+func (r *Runner) emit(ctx context.Context, runInfo runInfo, name string, meta map[string]any) {
 	if r.Emitter == nil {
 		return
 	}
+	now := r.Now()
 	_ = r.Emitter.Emit(ctx, ChangeEvent{
-		Name:      name,
-		ExportID:  exportID,
-		Timestamp: r.Now(),
-		Metadata:  meta,
+		Name:       name,
+		ExportID:   runInfo.exportID,
+		Definition: runInfo.resolved.Definition.Name,
+		Format:     runInfo.resolved.Request.Format,
+		Delivery:   runInfo.delivery,
+		Actor:      runInfo.actor,
+		Timestamp:  now,
+		Metadata:   mergeMetadata(runInfo.baseMeta, meta),
 	})
+}
+
+func (r *Runner) emitMetrics(ctx context.Context, runInfo runInfo, name string, stats RenderStats, err error) {
+	if r.Metrics == nil {
+		return
+	}
+	now := r.Now()
+	kind := ErrorKind("")
+	if err != nil {
+		kind = KindFromError(err)
+	}
+	_ = r.Metrics.Emit(ctx, MetricsEvent{
+		Name:       name,
+		ExportID:   runInfo.exportID,
+		Definition: runInfo.resolved.Definition.Name,
+		Format:     runInfo.resolved.Request.Format,
+		Delivery:   runInfo.delivery,
+		Actor:      runInfo.actor,
+		Rows:       stats.Rows,
+		Bytes:      stats.Bytes,
+		Duration:   now.Sub(runInfo.startedAt),
+		ErrorKind:  kind,
+		Timestamp:  now,
+	})
+}
+
+type runInfo struct {
+	exportID  string
+	resolved  ResolvedExport
+	actor     Actor
+	delivery  DeliveryMode
+	startedAt time.Time
+	baseMeta  map[string]any
+}
+
+func buildRunInfo(exportID string, resolved ResolvedExport, actor Actor, delivery DeliveryMode, nowFn func() time.Time) runInfo {
+	now := time.Now
+	if nowFn != nil {
+		now = nowFn
+	}
+	return runInfo{
+		exportID:  exportID,
+		resolved:  resolved,
+		actor:     actor,
+		delivery:  delivery,
+		startedAt: now(),
+		baseMeta:  baseMetadata(resolved),
+	}
+}
+
+func baseMetadata(resolved ResolvedExport) map[string]any {
+	meta := map[string]any{
+		"columns":            resolved.ColumnNames,
+		"selection_mode":     resolved.Request.Selection.Mode,
+		"selection_count":    len(resolved.Request.Selection.IDs),
+		"estimated_rows":     resolved.Request.EstimatedRows,
+		"estimated_bytes":    resolved.Request.EstimatedBytes,
+		"estimated_duration": resolved.Request.EstimatedDuration,
+		"filename":           resolved.Filename,
+	}
+	if resolved.Definition.Resource != "" {
+		meta["resource"] = resolved.Definition.Resource
+	}
+	if resolved.Definition.Variant != "" {
+		meta["variant"] = resolved.Definition.Variant
+	}
+	return meta
+}
+
+func mergeMetadata(base, extra map[string]any) map[string]any {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]any, len(base)+len(extra))
+	for k, v := range base {
+		merged[k] = v
+	}
+	for k, v := range extra {
+		merged[k] = v
+	}
+	return merged
+}
+
+func applyMaxDuration(ctx context.Context, nowFn func() time.Time, limit time.Duration) (context.Context, context.CancelFunc) {
+	if limit <= 0 {
+		return ctx, nil
+	}
+	now := time.Now
+	if nowFn != nil {
+		now = nowFn
+	}
+	deadline := now().Add(limit)
+	if existing, ok := ctx.Deadline(); ok && existing.Before(deadline) {
+		return ctx, nil
+	}
+	return context.WithDeadline(ctx, deadline)
 }
 
 // NopLogger is a no-op logger.
