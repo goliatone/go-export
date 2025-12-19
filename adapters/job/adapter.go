@@ -85,6 +85,9 @@ func (s *Scheduler) RequestExport(ctx context.Context, actor export.Actor, req e
 	if s.enqueuer == nil {
 		return export.ExportRecord{}, export.NewError(export.KindNotImpl, "job enqueuer not configured", nil)
 	}
+	if actor.ID == "" {
+		return export.ExportRecord{}, export.NewError(export.KindValidation, "actor ID is required", nil)
+	}
 
 	asyncReq := req
 	asyncReq.Delivery = export.DeliveryAsync
@@ -117,6 +120,11 @@ func (s *Scheduler) RequestExport(ctx context.Context, actor export.Actor, req e
 	}
 	encoded, err := encodePayload(payload)
 	if err != nil {
+		if s.tracker != nil {
+			if ferr := s.tracker.Fail(ctx, record.ID, err, map[string]any{"stage": "payload"}); ferr != nil {
+				s.logger.Errorf("payload failure tracking failed: %v", ferr)
+			}
+		}
 		return record, err
 	}
 
