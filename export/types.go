@@ -350,10 +350,14 @@ type Logger interface {
 
 // ChangeEvent describes lifecycle events.
 type ChangeEvent struct {
-	Name      string
-	ExportID  string
-	Timestamp time.Time
-	Metadata  map[string]any
+	Name       string
+	ExportID   string
+	Definition string
+	Format     Format
+	Delivery   DeliveryMode
+	Actor      Actor
+	Timestamp  time.Time
+	Metadata   map[string]any
 }
 
 // ChangeEmitter emits lifecycle events.
@@ -368,7 +372,27 @@ type RouterRegistrar interface {
 
 // QuotaHook enforces limits beyond per-definition policy.
 type QuotaHook interface {
-	Allow(ctx context.Context, req ExportRequest, def ResolvedDefinition) error
+	Allow(ctx context.Context, actor Actor, req ExportRequest, def ResolvedDefinition) error
+}
+
+// MetricsEvent describes lifecycle metrics.
+type MetricsEvent struct {
+	Name       string
+	ExportID   string
+	Definition string
+	Format     Format
+	Delivery   DeliveryMode
+	Actor      Actor
+	Rows       int64
+	Bytes      int64
+	Duration   time.Duration
+	ErrorKind  ErrorKind
+	Timestamp  time.Time
+}
+
+// MetricsHook emits metrics-friendly lifecycle observations.
+type MetricsHook interface {
+	Emit(ctx context.Context, evt MetricsEvent) error
 }
 
 // RetentionPolicy decides artifact TTLs.
