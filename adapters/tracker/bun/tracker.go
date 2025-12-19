@@ -2,7 +2,9 @@ package trackerbun
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -174,7 +176,7 @@ func (t *Tracker) Status(ctx context.Context, id string) (export.ExportRecord, e
 	model := new(recordModel)
 	err := t.DB.NewSelect().Model(model).Where("id = ?", id).Limit(1).Scan(ctx)
 	if err != nil {
-		if err == bun.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return export.ExportRecord{}, export.NewError(export.KindNotFound, fmt.Sprintf("export %q not found", id), nil)
 		}
 		return export.ExportRecord{}, err
