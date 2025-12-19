@@ -14,6 +14,11 @@ func (r JSONRenderer) Render(ctx context.Context, schema Schema, rows RowIterato
 	cw := &countingWriter{w: w}
 	stats := RenderStats{}
 
+	formatter, err := newFormatContext(opts.Format)
+	if err != nil {
+		return stats, err
+	}
+
 	mode := opts.JSON.Mode
 	if mode == "" {
 		mode = JSONModeArray
@@ -38,7 +43,11 @@ func (r JSONRenderer) Render(ctx context.Context, schema Schema, rows RowIterato
 
 			obj := make(map[string]any, len(schema.Columns))
 			for i, col := range schema.Columns {
-				obj[col.Name] = row[i]
+				formatted, err := formatter.formatJSONValue(col, row[i])
+				if err != nil {
+					return stats, err
+				}
+				obj[col.Name] = formatted
 			}
 			if err := encoder.Encode(obj); err != nil {
 				return stats, err
@@ -72,7 +81,11 @@ func (r JSONRenderer) Render(ctx context.Context, schema Schema, rows RowIterato
 
 		obj := make(map[string]any, len(schema.Columns))
 		for i, col := range schema.Columns {
-			obj[col.Name] = row[i]
+			formatted, err := formatter.formatJSONValue(col, row[i])
+			if err != nil {
+				return stats, err
+			}
+			obj[col.Name] = formatted
 		}
 		payload, err := json.Marshal(obj)
 		if err != nil {

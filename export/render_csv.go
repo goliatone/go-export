@@ -17,6 +17,11 @@ func (r CSVRenderer) Render(ctx context.Context, schema Schema, rows RowIterator
 		writer.Comma = opts.CSV.Delimiter
 	}
 
+	formatter, err := newFormatContext(opts.Format)
+	if err != nil {
+		return RenderStats{}, err
+	}
+
 	if opts.CSV.IncludeHeaders {
 		headers := make([]string, 0, len(schema.Columns))
 		for _, col := range schema.Columns {
@@ -50,7 +55,11 @@ func (r CSVRenderer) Render(ctx context.Context, schema Schema, rows RowIterator
 
 		record := make([]string, len(row))
 		for i, value := range row {
-			record[i] = stringify(value)
+			formatted, err := formatter.formatTextValue(schema.Columns[i], value)
+			if err != nil {
+				return stats, err
+			}
+			record[i] = formatted
 		}
 		if err := writer.Write(record); err != nil {
 			return stats, err

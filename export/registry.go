@@ -45,10 +45,6 @@ func (r *DefinitionRegistry) Resolve(req ExportRequest) (ResolvedDefinition, err
 
 	resolved := ResolvedDefinition{
 		ExportDefinition: def,
-		RowSourceKey:     def.RowSourceKey,
-		AllowedFormats:   def.AllowedFormats,
-		DefaultFilename:  def.DefaultFilename,
-		Policy:           def.Policy,
 		Variant:          req.SourceVariant,
 	}
 
@@ -73,7 +69,7 @@ func (r *DefinitionRegistry) Resolve(req ExportRequest) (ResolvedDefinition, err
 	}
 
 	if len(resolved.AllowedFormats) == 0 {
-		resolved.AllowedFormats = []Format{FormatCSV, FormatJSON, FormatNDJSON}
+		resolved.AllowedFormats = []Format{FormatCSV, FormatJSON, FormatNDJSON, FormatXLSX}
 	}
 
 	return resolved, nil
@@ -84,7 +80,7 @@ type RowSourceFactory func(req ExportRequest, def ResolvedDefinition) (RowSource
 
 // RowSourceRegistry stores row source factories.
 type RowSourceRegistry struct {
-	mu       sync.RWMutex
+	mu        sync.RWMutex
 	factories map[string]RowSourceFactory
 }
 
@@ -101,7 +97,7 @@ func (r *RowSourceRegistry) Register(key string, factory RowSourceFactory) error
 	if factory == nil {
 		return NewError(KindValidation, "row source factory is required", nil)
 	}
-	
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.factories[key]; exists {

@@ -33,6 +33,7 @@ func NewRunner() *Runner {
 	_ = renderers.Register(FormatCSV, CSVRenderer{})
 	_ = renderers.Register(FormatJSON, JSONRenderer{})
 	_ = renderers.Register(FormatNDJSON, JSONRenderer{})
+	_ = renderers.Register(FormatXLSX, XLSXRenderer{})
 
 	return &Runner{
 		Definitions: NewDefinitionRegistry(),

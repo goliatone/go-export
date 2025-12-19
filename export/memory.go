@@ -198,6 +198,50 @@ func (t *MemoryTracker) Status(ctx context.Context, id string) (ExportRecord, er
 	return record, nil
 }
 
+// SetArtifact updates the artifact metadata for a record.
+func (t *MemoryTracker) SetArtifact(ctx context.Context, id string, ref ArtifactRef) error {
+	_ = ctx
+	t.mu.Lock()
+	record, ok := t.records[id]
+	if !ok {
+		t.mu.Unlock()
+		return NewError(KindNotFound, fmt.Sprintf("export %q not found", id), nil)
+	}
+	record.Artifact = ref
+	t.records[id] = record
+	t.mu.Unlock()
+	return nil
+}
+
+// Update replaces a record by ID.
+func (t *MemoryTracker) Update(ctx context.Context, record ExportRecord) error {
+	_ = ctx
+	if record.ID == "" {
+		return NewError(KindValidation, "export ID is required", nil)
+	}
+	t.mu.Lock()
+	if _, ok := t.records[record.ID]; !ok {
+		t.mu.Unlock()
+		return NewError(KindNotFound, fmt.Sprintf("export %q not found", record.ID), nil)
+	}
+	t.records[record.ID] = record
+	t.mu.Unlock()
+	return nil
+}
+
+// Delete removes a record from the tracker.
+func (t *MemoryTracker) Delete(ctx context.Context, id string) error {
+	_ = ctx
+	t.mu.Lock()
+	if _, ok := t.records[id]; !ok {
+		t.mu.Unlock()
+		return NewError(KindNotFound, fmt.Sprintf("export %q not found", id), nil)
+	}
+	delete(t.records, id)
+	t.mu.Unlock()
+	return nil
+}
+
 // List returns records matching a filter.
 func (t *MemoryTracker) List(ctx context.Context, filter ProgressFilter) ([]ExportRecord, error) {
 	_ = ctx

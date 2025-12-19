@@ -71,8 +71,23 @@ func normalizeRequest(req ExportRequest) ExportRequest {
 	if req.RenderOptions.CSV.Delimiter == 0 {
 		req.RenderOptions.CSV.Delimiter = ','
 	}
+	if !req.RenderOptions.CSV.HeadersSet {
+		req.RenderOptions.CSV.IncludeHeaders = true
+	}
+	if !req.RenderOptions.XLSX.HeadersSet {
+		req.RenderOptions.XLSX.IncludeHeaders = true
+	}
+	if req.RenderOptions.JSON.Mode == "" && req.Format == FormatNDJSON {
+		req.RenderOptions.JSON.Mode = JSONModeLines
+	}
 	if req.RenderOptions.JSON.Mode == "" {
 		req.RenderOptions.JSON.Mode = JSONModeArray
+	}
+	if req.RenderOptions.Format.Locale == "" {
+		req.RenderOptions.Format.Locale = req.Locale
+	}
+	if req.RenderOptions.Format.Timezone == "" {
+		req.RenderOptions.Format.Timezone = req.Timezone
 	}
 	return req
 }

@@ -10,9 +10,11 @@ import (
 type Format string
 
 const (
-	FormatCSV    Format = "csv"
-	FormatJSON   Format = "json"
-	FormatNDJSON Format = "ndjson"
+	FormatCSV      Format = "csv"
+	FormatJSON     Format = "json"
+	FormatNDJSON   Format = "ndjson"
+	FormatXLSX     Format = "xlsx"
+	FormatTemplate Format = "template"
 )
 
 // DeliveryMode describes how exports are delivered.
@@ -103,9 +105,17 @@ type DeliveryThresholds struct {
 
 // Column defines a column in the export schema.
 type Column struct {
-	Name  string
-	Label string
-	Type  string
+	Name   string
+	Label  string
+	Type   string
+	Format ColumnFormat
+}
+
+// ColumnFormat provides renderer-specific formatting hints.
+type ColumnFormat struct {
+	Layout string
+	Number string
+	Excel  string
 }
 
 // Schema defines the columns for a dataset.
@@ -130,6 +140,7 @@ const (
 	StateCompleted  ExportState = "completed"
 	StateFailed     ExportState = "failed"
 	StateCanceled   ExportState = "canceled"
+	StateDeleted    ExportState = "deleted"
 )
 
 // ExportRecord captures tracker state for an export.
@@ -219,6 +230,7 @@ const (
 type CSVOptions struct {
 	IncludeHeaders bool
 	Delimiter      rune
+	HeadersSet     bool
 }
 
 // JSONOptions configures JSON output.
@@ -226,10 +238,27 @@ type JSONOptions struct {
 	Mode JSONMode
 }
 
+// XLSXOptions configures XLSX output.
+type XLSXOptions struct {
+	IncludeHeaders bool
+	HeadersSet     bool
+	SheetName      string
+	MaxRows        int
+	MaxBytes       int64
+}
+
+// FormatOptions configures locale/timezone formatting.
+type FormatOptions struct {
+	Locale   string
+	Timezone string
+}
+
 // RenderOptions configures renderer behavior.
 type RenderOptions struct {
-	CSV  CSVOptions
-	JSON JSONOptions
+	CSV    CSVOptions
+	JSON   JSONOptions
+	XLSX   XLSXOptions
+	Format FormatOptions
 }
 
 // ArtifactMeta captures stored artifact metadata.
@@ -270,6 +299,21 @@ type ProgressTracker interface {
 	Complete(ctx context.Context, id string, meta map[string]any) error
 	Status(ctx context.Context, id string) (ExportRecord, error)
 	List(ctx context.Context, filter ProgressFilter) ([]ExportRecord, error)
+}
+
+// ArtifactTracker updates stored artifact metadata.
+type ArtifactTracker interface {
+	SetArtifact(ctx context.Context, id string, ref ArtifactRef) error
+}
+
+// RecordUpdater updates records outside state transitions.
+type RecordUpdater interface {
+	Update(ctx context.Context, record ExportRecord) error
+}
+
+// RecordDeleter removes records from the tracker.
+type RecordDeleter interface {
+	Delete(ctx context.Context, id string) error
 }
 
 // ProgressFilter filters tracker lists.
@@ -329,9 +373,5 @@ type RetentionPolicy interface {
 // ResolvedDefinition is a definition with variant overrides applied.
 type ResolvedDefinition struct {
 	ExportDefinition
-	RowSourceKey    string
-	AllowedFormats  []Format
-	DefaultFilename string
-	Policy          ExportPolicy
-	Variant         string
+	Variant string
 }
