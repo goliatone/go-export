@@ -205,7 +205,7 @@ func (r *Runner) fail(ctx context.Context, exportID string, err error) {
 	if r.Tracker != nil {
 		_ = r.Tracker.Fail(ctx, exportID, err, nil)
 	}
-		r.emit(ctx, "export.failed", exportID, map[string]any{"error": err.Error()})
+	r.emit(ctx, "export.failed", exportID, map[string]any{"error": err.Error()})
 }
 
 func (r *Runner) emit(ctx context.Context, name, exportID string, meta map[string]any) {
@@ -236,12 +236,12 @@ func defaultIDGenerator() func() string {
 }
 
 type trackingIterator struct {
-	base         RowIterator
-	tracker      ProgressTracker
-	exportID     string
-	redactions   map[int]any
-	maxRows      int
-	currentRows  int64
+	base        RowIterator
+	tracker     ProgressTracker
+	exportID    string
+	redactions  map[int]any
+	maxRows     int
+	currentRows int64
 }
 
 func newTrackingIterator(base RowIterator, resolved ResolvedExport, tracker ProgressTracker, exportID string) *trackingIterator {

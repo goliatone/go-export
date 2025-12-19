@@ -202,7 +202,7 @@ func (t *MemoryTracker) Status(ctx context.Context, id string) (ExportRecord, er
 func (t *MemoryTracker) List(ctx context.Context, filter ProgressFilter) ([]ExportRecord, error) {
 	_ = ctx
 	result := []ExportRecord{}
-	
+
 	t.mu.RLock()
 	for _, record := range t.records {
 		if filter.Definition != "" && record.Definition != filter.Definition {
