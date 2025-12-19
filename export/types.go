@@ -302,6 +302,11 @@ type ProgressTracker interface {
 	List(ctx context.Context, filter ProgressFilter) ([]ExportRecord, error)
 }
 
+// CancelHook allows adapters to cancel running exports.
+type CancelHook interface {
+	Cancel(ctx context.Context, exportID string) error
+}
+
 // ArtifactTracker updates stored artifact metadata.
 type ArtifactTracker interface {
 	SetArtifact(ctx context.Context, id string, ref ArtifactRef) error
