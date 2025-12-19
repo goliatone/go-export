@@ -768,6 +768,10 @@ func contentTypeForFormat(format Format) string {
 		return "application/x-ndjson"
 	case FormatJSON:
 		return "application/json"
+	case FormatXLSX:
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case FormatTemplate:
+		return "text/html"
 	default:
 		return "application/octet-stream"
 	}
