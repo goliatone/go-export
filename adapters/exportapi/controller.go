@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	errorslib "github.com/goliatone/go-errors"
@@ -20,6 +19,11 @@ import (
 // DefaultMaxBufferBytes is the fallback buffer limit when streaming is unavailable.
 const DefaultMaxBufferBytes int64 = 8 * 1024 * 1024
 
+// AsyncRequester enqueues async exports (e.g., a job scheduler).
+type AsyncRequester interface {
+	RequestExport(ctx context.Context, actor export.Actor, req export.ExportRequest) (export.ExportRecord, error)
+}
+
 // Config configures the shared export API controller.
 type Config struct {
 	Service          export.Service
@@ -28,6 +32,7 @@ type Config struct {
 	Guard            export.Guard
 	ActorProvider    export.ActorProvider
 	DeliveryPolicy   export.DeliveryPolicy
+	AsyncRequester   AsyncRequester
 	BasePath         string
 	SignedURLTTL     time.Duration
 	IdempotencyStore IdempotencyStore
@@ -46,6 +51,7 @@ type Controller struct {
 	guard            export.Guard
 	actorProvider    export.ActorProvider
 	deliveryPolicy   export.DeliveryPolicy
+	asyncRequester   AsyncRequester
 	basePath         string
 	signedURLTTL     time.Duration
 	idempotencyStore IdempotencyStore
@@ -74,6 +80,10 @@ func NewController(cfg Config) *Controller {
 	if maxBuffer <= 0 {
 		maxBuffer = DefaultMaxBufferBytes
 	}
+	asyncRequester := cfg.AsyncRequester
+	if asyncRequester == nil {
+		asyncRequester = cfg.Service
+	}
 	return &Controller{
 		service:          cfg.Service,
 		runner:           cfg.Runner,
@@ -81,6 +91,7 @@ func NewController(cfg Config) *Controller {
 		guard:            cfg.Guard,
 		actorProvider:    cfg.ActorProvider,
 		deliveryPolicy:   cfg.DeliveryPolicy,
+		asyncRequester:   asyncRequester,
 		basePath:         basePath,
 		signedURLTTL:     cfg.SignedURLTTL,
 		idempotencyStore: cfg.IdempotencyStore,
@@ -201,6 +212,10 @@ func (c *Controller) handleAsync(req Request, res Response, actor export.Actor, 
 		WriteError(res, export.NewError(export.KindNotImpl, "export service not configured", nil))
 		return
 	}
+	if c.asyncRequester == nil {
+		WriteError(res, export.NewError(export.KindNotImpl, "async export requester not configured", nil))
+		return
+	}
 
 	idempotencyKey := resolved.Request.IdempotencyKey
 	if idempotencyKey != "" && c.idempotencyStore != nil {
@@ -226,7 +241,7 @@ func (c *Controller) handleAsync(req Request, res Response, actor export.Actor, 
 	asyncReq := resolved.Request
 	asyncReq.Delivery = export.DeliveryAsync
 	asyncReq.Output = nil
-	record, err := c.service.RequestExport(req.Context(), actor, asyncReq)
+	record, err := c.asyncRequester.RequestExport(req.Context(), actor, asyncReq)
 	if err != nil {
 		WriteError(res, err)
 		return
@@ -841,10 +856,8 @@ func (p staticActorProvider) FromContext(ctx context.Context) (export.Actor, err
 }
 
 func defaultIDGenerator() func() string {
-	var counter uint64
 	return func() string {
-		id := atomic.AddUint64(&counter, 1)
-		return fmt.Sprintf("exp-%d", id)
+		return fmt.Sprintf("exp-%d", time.Now().UnixMilli())
 	}
 }
 
