@@ -9,6 +9,8 @@ import (
 	"github.com/goliatone/go-router"
 )
 
+var _ exportapi.Response = routerResponse{}
+
 type routerRequest struct {
 	ctx router.Context
 }
@@ -114,5 +116,3 @@ func (res routerResponse) Redirect(location string, status int) error {
 	}
 	return res.ctx.Redirect(location, status)
 }
-
-var _ exportapi.Response = routerResponse{}
