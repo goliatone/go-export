@@ -137,6 +137,7 @@ type renderOptionsPayload struct {
 	JSON     jsonOptionsPayload     `json:"json,omitempty"`
 	Template templateOptionsPayload `json:"template,omitempty"`
 	XLSX     xlsxOptionsPayload     `json:"xlsx,omitempty"`
+	PDF      pdfOptionsPayload      `json:"pdf,omitempty"`
 	Format   formatOptionsPayload   `json:"format,omitempty"`
 }
 
@@ -170,6 +171,19 @@ func (p renderOptionsPayload) toRenderOptions() export.RenderOptions {
 			SheetName:      p.XLSX.SheetName,
 			MaxRows:        p.XLSX.MaxRows,
 			MaxBytes:       p.XLSX.MaxBytes,
+		},
+		PDF: export.PDFOptions{
+			PageSize:             p.PDF.PageSize,
+			Landscape:            p.PDF.Landscape,
+			PrintBackground:      p.PDF.PrintBackground,
+			Scale:                p.PDF.Scale,
+			MarginTop:            p.PDF.MarginTop,
+			MarginBottom:         p.PDF.MarginBottom,
+			MarginLeft:           p.PDF.MarginLeft,
+			MarginRight:          p.PDF.MarginRight,
+			PreferCSSPageSize:    p.PDF.PreferCSSPageSize,
+			BaseURL:              p.PDF.BaseURL,
+			ExternalAssetsPolicy: p.PDF.ExternalAssetsPolicy,
 		},
 		Format: export.FormatOptions{
 			Locale:   p.Format.Locale,
@@ -209,6 +223,20 @@ type xlsxOptionsPayload struct {
 	SheetName      string `json:"sheet_name,omitempty"`
 	MaxRows        int    `json:"max_rows,omitempty"`
 	MaxBytes       int64  `json:"max_bytes,omitempty"`
+}
+
+type pdfOptionsPayload struct {
+	PageSize             string                         `json:"page_size,omitempty"`
+	Landscape            *bool                          `json:"landscape,omitempty"`
+	PrintBackground      *bool                          `json:"print_background,omitempty"`
+	Scale                float64                        `json:"scale,omitempty"`
+	MarginTop            string                         `json:"margin_top,omitempty"`
+	MarginBottom         string                         `json:"margin_bottom,omitempty"`
+	MarginLeft           string                         `json:"margin_left,omitempty"`
+	MarginRight          string                         `json:"margin_right,omitempty"`
+	PreferCSSPageSize    *bool                          `json:"prefer_css_page_size,omitempty"`
+	BaseURL              string                         `json:"base_url,omitempty"`
+	ExternalAssetsPolicy export.PDFExternalAssetsPolicy `json:"external_assets_policy,omitempty"`
 }
 
 type formatOptionsPayload struct {
