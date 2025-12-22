@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/goliatone/go-export/export"
 )
@@ -150,6 +151,36 @@ func TestRenderer_BufferedRenders(t *testing.T) {
 		t.Fatalf("expected 2 rows, got %d", stats.Rows)
 	}
 	if got := buf.String(); got != "alicebob" {
+		t.Fatalf("unexpected output: %q", got)
+	}
+}
+
+func TestRenderer_TemplateMeta(t *testing.T) {
+	tmpl := template.Must(template.New("export").Parse("{{.Title}}|{{.Definition}}|{{.Generated}}|{{index .Columns 0}}|{{.RowCount}}"))
+	renderer := Renderer{
+		Enabled:   true,
+		Templates: tmpl,
+	}
+	buf := &bytes.Buffer{}
+	now := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+	schema := export.Schema{Columns: []export.Column{
+		{Name: "id", Label: "ID"},
+		{Name: "name"},
+	}}
+	_, err := renderer.Render(context.Background(), schema, &stubIterator{
+		rows: []export.Row{{"1", "alice"}},
+	}, buf, export.RenderOptions{
+		Template: export.TemplateOptions{
+			Title:       "Report",
+			Definition:  "users",
+			GeneratedAt: now,
+		},
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	want := "Report|users|" + now.Format(time.RFC3339) + "|ID|1"
+	if got := buf.String(); got != want {
 		t.Fatalf("unexpected output: %q", got)
 	}
 }

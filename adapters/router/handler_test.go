@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"html/template"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/goliatone/go-export/adapters/exportapi"
 	exporthttp "github.com/goliatone/go-export/adapters/http"
+	exporttemplate "github.com/goliatone/go-export/adapters/template"
 	"github.com/goliatone/go-export/export"
 	"github.com/goliatone/go-router"
 )
@@ -65,6 +67,14 @@ func newTestRunner(t *testing.T) *export.Runner {
 	}); err != nil {
 		t.Fatalf("register source: %v", err)
 	}
+	tmpl := template.Must(template.New("export").Parse("<html><body>{{range .Rows}}{{index . 0}}{{end}}</body></html>"))
+	if err := runner.Renderers.Register(export.FormatTemplate, exporttemplate.Renderer{
+		Enabled:      true,
+		Templates:    tmpl,
+		TemplateName: "export",
+	}); err != nil {
+		t.Fatalf("register template renderer: %v", err)
+	}
 	return runner
 }
 
@@ -102,7 +112,11 @@ func seedPreviewRecord(t *testing.T, tracker export.ProgressTracker, store expor
 		Definition: "users",
 		Format:     export.FormatTemplate,
 		State:      state,
-		Artifact:   ref,
+		Request: export.ExportRequest{
+			Definition: "users",
+			Format:     export.FormatTemplate,
+		},
+		Artifact: ref,
 	}); err != nil {
 		t.Fatalf("tracker start: %v", err)
 	}
@@ -314,8 +328,8 @@ func TestTransportParity_Preview(t *testing.T) {
 	actor := export.Actor{ID: "user-1"}
 
 	t.Run("ok", func(t *testing.T) {
-		serviceHTTP, trackerHTTP, storeHTTP := newTestService(export.NewRunner(), "exp-preview")
-		serviceRouter, trackerRouter, storeRouter := newTestService(export.NewRunner(), "exp-preview")
+		serviceHTTP, trackerHTTP, storeHTTP := newTestService(newTestRunner(t), "exp-preview")
+		serviceRouter, trackerRouter, storeRouter := newTestService(newTestRunner(t), "exp-preview")
 
 		seedPreviewRecord(t, trackerHTTP, storeHTTP, "exp-preview", export.StateCompleted, "text/html")
 		seedPreviewRecord(t, trackerRouter, storeRouter, "exp-preview", export.StateCompleted, "text/html")
@@ -361,8 +375,8 @@ func TestTransportParity_Preview(t *testing.T) {
 	})
 
 	t.Run("non-html", func(t *testing.T) {
-		serviceHTTP, trackerHTTP, storeHTTP := newTestService(export.NewRunner(), "exp-preview")
-		serviceRouter, trackerRouter, storeRouter := newTestService(export.NewRunner(), "exp-preview")
+		serviceHTTP, trackerHTTP, storeHTTP := newTestService(newTestRunner(t), "exp-preview")
+		serviceRouter, trackerRouter, storeRouter := newTestService(newTestRunner(t), "exp-preview")
 
 		seedPreviewRecord(t, trackerHTTP, storeHTTP, "exp-preview", export.StateCompleted, "text/csv")
 		seedPreviewRecord(t, trackerRouter, storeRouter, "exp-preview", export.StateCompleted, "text/csv")
@@ -394,8 +408,8 @@ func TestTransportParity_Preview(t *testing.T) {
 	})
 
 	t.Run("not-completed", func(t *testing.T) {
-		serviceHTTP, trackerHTTP, storeHTTP := newTestService(export.NewRunner(), "exp-preview")
-		serviceRouter, trackerRouter, storeRouter := newTestService(export.NewRunner(), "exp-preview")
+		serviceHTTP, trackerHTTP, storeHTTP := newTestService(newTestRunner(t), "exp-preview")
+		serviceRouter, trackerRouter, storeRouter := newTestService(newTestRunner(t), "exp-preview")
 
 		seedPreviewRecord(t, trackerHTTP, storeHTTP, "exp-preview", export.StateRunning, "text/html")
 		seedPreviewRecord(t, trackerRouter, storeRouter, "exp-preview", export.StateRunning, "text/html")
@@ -423,7 +437,21 @@ func TestTransportParity_Preview(t *testing.T) {
 			t.Fatalf("router handle: %v", err)
 		}
 
-		assertErrorParity(t, rec, routerCtx.recorder)
+		if rec.Code != routerCtx.recorder.Code {
+			t.Fatalf("status mismatch: http=%d router=%d", rec.Code, routerCtx.recorder.Code)
+		}
+		if rec.Header().Get("Content-Type") != routerCtx.recorder.Header().Get("Content-Type") {
+			t.Fatalf("content-type mismatch: http=%q router=%q", rec.Header().Get("Content-Type"), routerCtx.recorder.Header().Get("Content-Type"))
+		}
+		if rec.Header().Get("Content-Disposition") != routerCtx.recorder.Header().Get("Content-Disposition") {
+			t.Fatalf("content-disposition mismatch: http=%q router=%q", rec.Header().Get("Content-Disposition"), routerCtx.recorder.Header().Get("Content-Disposition"))
+		}
+		if rec.Body.String() != routerCtx.recorder.Body.String() {
+			t.Fatalf("body mismatch: http=%q router=%q", rec.Body.String(), routerCtx.recorder.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "<html") {
+			t.Fatalf("expected html content, got %q", rec.Body.String())
+		}
 	})
 }
 

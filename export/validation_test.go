@@ -59,6 +59,124 @@ func TestResolveExport_SelectionQueryRequiresName(t *testing.T) {
 	}
 }
 
+func TestResolveExport_TemplateDefaults(t *testing.T) {
+	def := ResolvedDefinition{
+		ExportDefinition: ExportDefinition{
+			Name:           "users",
+			AllowedFormats: []Format{FormatTemplate},
+			Schema: Schema{Columns: []Column{
+				{Name: "id"},
+			}},
+		},
+	}
+
+	resolved, err := ResolveExport(ExportRequest{
+		Definition: "users",
+		Format:     FormatTemplate,
+	}, def, testNow())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if resolved.Request.RenderOptions.Template.Definition != "users" {
+		t.Fatalf("expected definition, got %q", resolved.Request.RenderOptions.Template.Definition)
+	}
+	if resolved.Request.RenderOptions.Template.Title != "users" {
+		t.Fatalf("expected title, got %q", resolved.Request.RenderOptions.Template.Title)
+	}
+	if !resolved.Request.RenderOptions.Template.GeneratedAt.Equal(testNow()) {
+		t.Fatalf("expected generated_at to match now")
+	}
+}
+
+func TestResolveExport_PDFTemplateDefaults(t *testing.T) {
+	def := ResolvedDefinition{
+		ExportDefinition: ExportDefinition{
+			Name:           "users",
+			AllowedFormats: []Format{FormatPDF},
+			Schema: Schema{Columns: []Column{
+				{Name: "id"},
+			}},
+		},
+	}
+
+	resolved, err := ResolveExport(ExportRequest{
+		Definition: "users",
+		Format:     FormatPDF,
+	}, def, testNow())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if resolved.Request.RenderOptions.Template.Definition != "users" {
+		t.Fatalf("expected definition, got %q", resolved.Request.RenderOptions.Template.Definition)
+	}
+	if resolved.Request.RenderOptions.Template.Title != "users" {
+		t.Fatalf("expected title, got %q", resolved.Request.RenderOptions.Template.Title)
+	}
+	if !resolved.Request.RenderOptions.Template.GeneratedAt.Equal(testNow()) {
+		t.Fatalf("expected generated_at to match now")
+	}
+}
+
+func TestResolveExport_TemplateDefinitionDefaults(t *testing.T) {
+	def := ResolvedDefinition{
+		ExportDefinition: ExportDefinition{
+			Name:           "users",
+			AllowedFormats: []Format{FormatTemplate},
+			Schema: Schema{Columns: []Column{
+				{Name: "id"},
+			}},
+			Template: TemplateOptions{
+				TemplateName: "summary",
+				Layout:       "compact",
+				ChartConfig:  map[string]any{"title": "Totals"},
+				Theme:        map[string]any{"accent": "#111111", "bg": "#ffffff"},
+				Header:       map[string]any{"title": "Summary Report"},
+				Footer:       map[string]any{"note": "Confidential"},
+				Data:         map[string]any{"pdf_assets_host": "/assets/"},
+			},
+		},
+	}
+
+	resolved, err := ResolveExport(ExportRequest{
+		Definition: "users",
+		Format:     FormatTemplate,
+		RenderOptions: RenderOptions{
+			Template: TemplateOptions{
+				Layout: "detailed",
+				Theme:  map[string]any{"accent": "#222222"},
+				Header: map[string]any{"subtitle": "Q1"},
+			},
+		},
+	}, def, testNow())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if resolved.Request.RenderOptions.Template.TemplateName != "summary" {
+		t.Fatalf("expected template_name, got %q", resolved.Request.RenderOptions.Template.TemplateName)
+	}
+	if resolved.Request.RenderOptions.Template.Layout != "detailed" {
+		t.Fatalf("expected layout override, got %q", resolved.Request.RenderOptions.Template.Layout)
+	}
+	theme := resolved.Request.RenderOptions.Template.Theme
+	if theme["accent"] != "#222222" || theme["bg"] != "#ffffff" {
+		t.Fatalf("unexpected theme: %#v", theme)
+	}
+	header := resolved.Request.RenderOptions.Template.Header
+	if header["title"] != "Summary Report" || header["subtitle"] != "Q1" {
+		t.Fatalf("unexpected header: %#v", header)
+	}
+	if resolved.Request.RenderOptions.Template.Footer["note"] != "Confidential" {
+		t.Fatalf("unexpected footer: %#v", resolved.Request.RenderOptions.Template.Footer)
+	}
+	if resolved.Request.RenderOptions.Template.Data["pdf_assets_host"] != "/assets/" {
+		t.Fatalf("unexpected data: %#v", resolved.Request.RenderOptions.Template.Data)
+	}
+	chart, ok := resolved.Request.RenderOptions.Template.ChartConfig.(map[string]any)
+	if !ok || chart["title"] != "Totals" {
+		t.Fatalf("unexpected chart config: %#v", resolved.Request.RenderOptions.Template.ChartConfig)
+	}
+}
+
 func TestRunner_RedactsColumns(t *testing.T) {
 	buf := &bytes.Buffer{}
 	iter := &stubIterator{rows: []Row{{"1", "secret"}}}
