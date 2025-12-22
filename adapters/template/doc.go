@@ -10,6 +10,6 @@
 // rows through a channel so templates can range over .Rows without loading all
 // rows into memory (channel-based rows work best with range blocks).
 //
-// PDF output is not implemented in this package. Render HTML and convert to PDF
-// via an external pipeline (wkhtmltopdf/headless Chrome) if needed.
+// For server-side PDF output, pair the template renderer with adapters/pdf
+// (wkhtmltopdf or a custom chromedp/rod engine).
 package exporttemplate
