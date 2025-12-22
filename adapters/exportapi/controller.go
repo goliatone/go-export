@@ -783,6 +783,8 @@ func contentTypeForFormat(format export.Format) string {
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	case export.FormatTemplate:
 		return "text/html"
+	case export.FormatPDF:
+		return "application/pdf"
 	default:
 		return "application/octet-stream"
 	}
@@ -801,6 +803,8 @@ func formatFromPath(name string) export.Format {
 		return export.FormatXLSX
 	case "html":
 		return export.FormatTemplate
+	case "pdf":
+		return export.FormatPDF
 	default:
 		return ""
 	}
