@@ -79,6 +79,12 @@
         .btn-secondary:hover {
             background: #4b5563;
         }
+        .btn-preview {
+            background: #10b981;
+        }
+        .btn-preview:hover {
+            background: #059669;
+        }
         .export-form {
             display: flex;
             gap: 1rem;
@@ -202,6 +208,8 @@
                     <option value="json">JSON</option>
                     <option value="ndjson">NDJSON</option>
                     <option value="xlsx">Excel (XLSX)</option>
+                    <option value="template">HTML (Template)</option>
+                    <option value="pdf">PDF</option>
                 </select>
             </div>
             <div class="form-group">
@@ -255,7 +263,7 @@
                 <button id="exportBtn" onclick="triggerExport()">Export</button>
             </div>
         </div>
-        <p class="hint">Auto switches to async above {{ max_rows }} estimated rows.</p>
+        <p class="hint">Auto switches to async above {{ max_rows|integer }} estimated rows.</p>
         <div id="exportStatus" class="status"></div>
     </div>
 
@@ -456,6 +464,7 @@
             }
             statusEl.className = 'status loading';
             statusEl.textContent = `Export queued. ID: ${exportId}`;
+            loadHistory();
             pollExport(exportId, 0);
         }
 
@@ -506,7 +515,8 @@
             fetch('/admin/exports')
                 .then(response => response.json())
                 .then(data => {
-                    if (!data.exports || data.exports.length === 0) {
+                    const exportsList = Array.isArray(data) ? data : (data.exports || []);
+                    if (exportsList.length === 0) {
                         container.innerHTML = '<div class="empty-state">No exports yet</div>';
                         return;
                     }
@@ -525,7 +535,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                ${data.exports.map(exp => `
+                                ${exportsList.map(exp => `
                                     <tr>
                                         <td><code>${exp.ID.slice(0, 8)}...</code></td>
                                         <td>${exp.Definition}</td>
@@ -535,6 +545,7 @@
                                         <td>${new Date(exp.CreatedAt).toLocaleString()}</td>
                                         <td class="actions">
                                             ${exp.State === 'completed' ? `<button onclick="downloadExport('${exp.ID}')">Download</button>` : ''}
+                                            ${exp.State === 'completed' && exp.Format === 'template' ? `<button class="btn-preview" onclick="previewExport('${exp.ID}')">Preview</button>` : ''}
                                             <button class="btn-secondary" onclick="deleteExport('${exp.ID}')">Delete</button>
                                         </td>
                                     </tr>
@@ -551,6 +562,10 @@
 
         function downloadExport(id) {
             window.location.href = `/admin/exports/${id}/download`;
+        }
+
+        function previewExport(id) {
+            window.open(`/admin/exports/${id}/preview`, '_blank');
         }
 
         function deleteExport(id) {
