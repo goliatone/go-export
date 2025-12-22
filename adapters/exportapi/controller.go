@@ -555,6 +555,45 @@ func (c *Controller) handleDelete(req Request, res Response, exportID string) {
 	res.WriteHeader(http.StatusNoContent)
 }
 
+func (c *Controller) previewMetadata(ctx context.Context, actor export.Actor, record export.ExportRecord) (export.DownloadInfo, error) {
+	if record.State != export.StateCompleted {
+		if err := c.generatePreview(ctx, actor, record); err != nil {
+			return export.DownloadInfo{}, err
+		}
+	}
+
+	info, err := c.service.DownloadMetadata(ctx, actor, record.ID)
+	if err == nil {
+		return info, nil
+	}
+	ge := export.AsGoError(err)
+	if ge != nil && ge.Category == errorslib.CategoryNotFound {
+		if err := c.generatePreview(ctx, actor, record); err != nil {
+			return export.DownloadInfo{}, err
+		}
+		return c.service.DownloadMetadata(ctx, actor, record.ID)
+	}
+	return export.DownloadInfo{}, err
+}
+
+func (c *Controller) generatePreview(ctx context.Context, actor export.Actor, record export.ExportRecord) error {
+	if c.service == nil {
+		return export.NewError(export.KindNotImpl, "export service not configured", nil)
+	}
+	req := record.Request
+	if req.Definition == "" {
+		req.Definition = record.Definition
+	}
+	if req.Definition == "" {
+		return export.NewError(export.KindValidation, "preview request not available", nil)
+	}
+	req.Format = export.FormatTemplate
+	req.Delivery = export.DeliverySync
+	req.Output = nil
+	_, err := c.service.GenerateExport(ctx, actor, record.ID, req)
+	return err
+}
+
 func (c *Controller) actorFromRequest(req Request) (export.Actor, error) {
 	if c.actorProvider == nil {
 		return export.Actor{}, nil
