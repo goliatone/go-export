@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync/atomic"
 	"time"
 )
 
@@ -131,6 +130,9 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 			RequestedBy: actor,
 			Scope:       actor.Scope,
 			CreatedAt:   r.Now(),
+		}
+		if isTemplateFormat(runReq.Format) {
+			record.Request = sanitizeRequestForRecord(runReq)
 		}
 		id, err := r.Tracker.Start(ctx, record)
 		if err != nil {
@@ -377,10 +379,8 @@ func (NopLogger) Infof(string, ...any)  {}
 func (NopLogger) Errorf(string, ...any) {}
 
 func defaultIDGenerator() func() string {
-	var counter uint64
 	return func() string {
-		id := atomic.AddUint64(&counter, 1)
-		return fmt.Sprintf("exp-%d", id)
+		return fmt.Sprintf("exp-%d", time.Now().UnixMilli())
 	}
 }
 
