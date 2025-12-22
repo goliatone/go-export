@@ -170,7 +170,7 @@ func (s *service) GenerateExport(ctx context.Context, actor Actor, exportID stri
 	}
 
 	if _, err := s.tracker.Status(ctx, exportID); err != nil {
-		_, startErr := s.tracker.Start(ctx, ExportRecord{
+		record := ExportRecord{
 			ID:          exportID,
 			Definition:  resolved.Definition.Name,
 			Format:      resolved.Request.Format,
@@ -186,7 +186,11 @@ func (s *service) GenerateExport(ctx context.Context, actor Actor, exportID stri
 					CreatedAt:   s.now(),
 				},
 			},
-		})
+		}
+		if isTemplateFormat(resolved.Request.Format) {
+			record.Request = sanitizeRequestForRecord(resolved.Request)
+		}
+		_, startErr := s.tracker.Start(ctx, record)
 		if startErr != nil {
 			return ExportResult{}, AsGoError(startErr)
 		}
@@ -519,6 +523,9 @@ func (s *service) requestAsync(ctx context.Context, actor Actor, resolved Resolv
 			},
 		},
 	}
+	if isTemplateFormat(resolved.Request.Format) {
+		record.Request = sanitizeRequestForRecord(resolved.Request)
+	}
 
 	if s.runner != nil && s.runner.Retention != nil {
 		ttl, err := s.runner.Retention.TTL(ctx, actor, resolved.Request, resolved.Definition)
@@ -553,7 +560,14 @@ func (s *service) resolveRequest(req ExportRequest) (ResolvedExport, error) {
 	if err != nil {
 		return ResolvedExport{}, err
 	}
-	return ResolveExport(req, def, s.now())
+	resolved, err := ResolveExport(req, def, s.now())
+	if err != nil {
+		return ResolvedExport{}, err
+	}
+	if _, err := s.runner.resolveTransformers(resolved.Definition); err != nil {
+		return ResolvedExport{}, err
+	}
+	return resolved, nil
 }
 
 func (s *service) runnerWithActor(actor Actor) *Runner {
@@ -682,7 +696,7 @@ type storeResult struct {
 }
 
 func recordFromResult(actor Actor, resolved ResolvedExport, result ExportResult, now time.Time) ExportRecord {
-	return ExportRecord{
+	record := ExportRecord{
 		ID:          result.ID,
 		Definition:  resolved.Definition.Name,
 		Format:      result.Format,
@@ -697,6 +711,10 @@ func recordFromResult(actor Actor, resolved ResolvedExport, result ExportResult,
 		StartedAt:    now,
 		CompletedAt:  now,
 	}
+	if isTemplateFormat(result.Format) {
+		record.Request = sanitizeRequestForRecord(resolved.Request)
+	}
+	return record
 }
 
 func scopeMatches(actor Scope, record Scope) bool {
@@ -815,6 +833,8 @@ func contentTypeForFormat(format Format) string {
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	case FormatTemplate:
 		return "text/html"
+	case FormatPDF:
+		return "application/pdf"
 	default:
 		return "application/octet-stream"
 	}
