@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -75,7 +76,8 @@ func buildServer(app *App) (router.Server[*fiber.App], error) {
 	viewCfg := router.NewSimpleViewConfig("./views").
 		WithExt(".html").
 		WithReload(true).
-		WithDebug(true)
+		WithDebug(true).
+		WithFunctions(templateFunctions())
 
 	engine, err := router.InitializeViewEngine(viewCfg)
 	if err != nil {
@@ -108,5 +110,17 @@ func fiberAppInitializer(engine fiber.Views) func(*fiber.App) *fiber.App {
 		}))
 
 		return fiberApp
+	}
+}
+
+func templateFunctions() map[string]any {
+	return map[string]any{
+		"to_json": func(data any) string {
+			payload, err := json.Marshal(data)
+			if err != nil {
+				return ""
+			}
+			return string(payload)
+		},
 	}
 }
