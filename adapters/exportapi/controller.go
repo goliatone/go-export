@@ -457,7 +457,17 @@ func (c *Controller) handlePreview(req Request, res Response, exportID string) {
 		return
 	}
 
-	info, err := c.service.DownloadMetadata(req.Context(), actor, exportID)
+	record, err := c.service.Status(req.Context(), actor, exportID)
+	if err != nil {
+		WriteError(res, err)
+		return
+	}
+	if record.Format != export.FormatTemplate {
+		WriteError(res, export.NewError(export.KindValidation, "preview only supports template exports", nil))
+		return
+	}
+
+	info, err := c.previewMetadata(req.Context(), actor, record)
 	if err != nil {
 		WriteError(res, err)
 		return
