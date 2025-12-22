@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: #f5f5f5;
+            color: #333;
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 2rem;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            margin-top: 0;
+            color: #1f2937;
+            font-size: 1.25rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #374151;
+        }
+        select, button, input[type="text"], input[type="number"] {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            border: 1px solid #d1d5db;
+            font-size: 1rem;
+        }
+        input[type="text"], input[type="number"] {
+            width: 220px;
+            background: white;
+        }
+        select {
+            width: 220px;
+            background: white;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #6b7280;
+        }
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+        .export-form {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.5rem 1rem;
+        }
+        .checkbox-grid label {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-weight: 400;
+        }
+        .radio-group {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .hint {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 4px;
+            display: none;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            display: block;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            display: block;
+        }
+        .status.loading {
+            background: #dbeafe;
+            color: #1e40af;
+            display: block;
+        }
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .history-table th,
+        .history-table td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .history-table th {
+            background: #f9fafb;
+            font-weight: 600;
+        }
+        .history-table tr:hover {
+            background: #f9fafb;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-completed { background: #d1fae5; color: #065f46; }
+        .badge-running { background: #dbeafe; color: #1e40af; }
+        .badge-queued { background: #fef3c7; color: #92400e; }
+        .badge-failed { background: #fee2e2; color: #991b1b; }
+        .badge-canceled { background: #f3f4f6; color: #6b7280; }
+        .actions button {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+            margin-right: 0.25rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+        .api-docs {
+            font-family: monospace;
+            background: #1f2937;
+            color: #e5e7eb;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .api-docs code {
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{ title }}</h1>
+    <p class="subtitle">Export data from your application in multiple formats</p>
+
+    <div class="card">
+        <h2>Datagrid Export</h2>
+        <div class="export-form">
+            <div class="form-group">
+                <label for="definition">Dataset</label>
+                <select id="definition" onchange="updateColumns()">
+                    <option value="users">Users</option>
+                    <option value="products">Products</option>
+                    <option value="orders">Orders</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="format">Format</label>
+                <select id="format">
+                    <option value="csv">CSV</option>
+                    <option value="json">JSON</option>
+                    <option value="ndjson">NDJSON</option>
+                    <option value="xlsx">Excel (XLSX)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="search">Search</label>
+                <input id="search" type="text" placeholder="Search users...">
+            </div>
+            <div class="form-group">
+                <label for="roleFilter">Role Filter</label>
+                <select id="roleFilter">
+                    <option value="">Any</option>
+                    <option value="admin">Admin</option>
+                    <option value="editor">Editor</option>
+                    <option value="user">User</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="sort">Sort</label>
+                <select id="sort">
+                    <option value="">Default</option>
+                    <option value="created_at:desc">Newest first</option>
+                    <option value="created_at:asc">Oldest first</option>
+                    <option value="name:asc">Name A-Z</option>
+                    <option value="name:desc">Name Z-A</option>
+                </select>
+            </div>
+            <div class="form-group" style="min-width: 280px;">
+                <label>Columns</label>
+                <div id="columns" class="checkbox-grid"></div>
+            </div>
+            <div class="form-group" style="min-width: 260px;">
+                <label>Selection</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="selectionMode" value="all" checked onchange="toggleSelectionMode()"> All rows</label>
+                    <label><input type="radio" name="selectionMode" value="ids" onchange="toggleSelectionMode()"> Selected IDs</label>
+                </div>
+                <input id="selectedIds" type="text" placeholder="usr_001, usr_002" disabled oninput="updateEstimatedRows()">
+            </div>
+            <div class="form-group">
+                <label for="estimatedRows">Estimated Rows</label>
+                <input id="estimatedRows" type="number" min="0" value="10" oninput="updateEstimatedRows()">
+            </div>
+            <div class="form-group">
+                <label for="delivery">Delivery</label>
+                <select id="delivery">
+                    <option value="auto" selected>Auto</option>
+                    <option value="sync">Sync</option>
+                    <option value="async">Async</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <button id="exportBtn" onclick="triggerExport()">Export</button>
+            </div>
+        </div>
+        <p class="hint">Auto switches to async above {{ max_rows }} estimated rows.</p>
+        <div id="exportStatus" class="status"></div>
+    </div>
+
+    <div class="card">
+        <h2>Export History</h2>
+        <button class="btn-secondary" onclick="loadHistory()" style="margin-bottom: 1rem;">Refresh</button>
+        <div id="historyContainer">
+            <div class="empty-state">Click Refresh to load export history</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>API Reference</h2>
+        <div class="api-docs">
+            <p><code>POST /admin/exports</code> - Request a new export</p>
+            <pre>{
+  "definition": "users",
+  "format": "csv",
+  "query": {
+    "filters": [{ "field": "role", "op": "eq", "value": "admin" }],
+    "search": "alice",
+    "sort": [{ "field": "created_at", "desc": true }]
+  },
+  "columns": ["id", "email", "name"],
+  "selection": { "mode": "all" },
+  "estimated_rows": 10,
+  "delivery": "auto"
+}</pre>
+            <p><code>GET /admin/exports</code> - List export history</p>
+            <p><code>GET /admin/exports/:id</code> - Get export status</p>
+            <p><code>GET /admin/exports/:id/download</code> - Download artifact</p>
+            <p><code>DELETE /admin/exports/:id</code> - Delete/cancel export</p>
+            <p><code>GET /api/definitions</code> - List available definitions</p>
+        </div>
+    </div>
+
+    <script>
+        const definitionColumns = {
+            users: ["id", "email", "name", "role", "created_at"],
+            products: ["id", "name", "sku", "price", "quantity"],
+            orders: ["id", "customer", "total", "status", "created_at"]
+        };
+
+        function updateColumns() {
+            const definition = document.getElementById('definition').value;
+            const container = document.getElementById('columns');
+            const cols = definitionColumns[definition] || [];
+            container.innerHTML = cols.map(col => `
+                <label><input type="checkbox" value="${col}" checked> ${col}</label>
+            `).join('');
+        }
+
+        function toggleSelectionMode() {
+            const mode = document.querySelector('input[name="selectionMode"]:checked').value;
+            const idsInput = document.getElementById('selectedIds');
+            idsInput.disabled = mode !== 'ids';
+            if (mode !== 'ids') {
+                idsInput.value = '';
+            }
+            updateEstimatedRows();
+        }
+
+        function parseSelectedIds() {
+            const idsRaw = document.getElementById('selectedIds').value || '';
+            return idsRaw.split(',').map(id => id.trim()).filter(Boolean);
+        }
+
+        function updateEstimatedRows() {
+            const mode = document.querySelector('input[name="selectionMode"]:checked').value;
+            const estimatedInput = document.getElementById('estimatedRows');
+            if (mode === 'ids') {
+                const ids = parseSelectedIds();
+                estimatedInput.value = ids.length;
+                estimatedInput.disabled = true;
+            } else {
+                estimatedInput.disabled = false;
+            }
+        }
+
+        function buildQuery(definition) {
+            const search = document.getElementById('search').value.trim();
+            const role = document.getElementById('roleFilter').value;
+            const sortValue = document.getElementById('sort').value;
+
+            const query = { filters: [], sort: [] };
+            if (search) {
+                query.search = search;
+            }
+            if (role && definition === 'users') {
+                query.filters.push({ field: 'role', op: 'eq', value: role });
+            }
+            if (sortValue) {
+                const [field, dir] = sortValue.split(':');
+                query.sort.push({ field: field, desc: dir === 'desc' });
+            }
+
+            if (!query.search && query.filters.length === 0 && query.sort.length === 0) {
+                return null;
+            }
+            return query;
+        }
+
+        function buildExportRequest() {
+            const definition = document.getElementById('definition').value;
+            const format = document.getElementById('format').value;
+            const delivery = document.getElementById('delivery').value;
+            const mode = document.querySelector('input[name="selectionMode"]:checked').value;
+            const estimatedRowsValue = parseInt(document.getElementById('estimatedRows').value, 10) || 0;
+
+            const columns = Array.from(document.querySelectorAll('#columns input[type="checkbox"]'))
+                .filter(input => input.checked)
+                .map(input => input.value);
+
+            const payload = {
+                definition: definition,
+                format: format,
+                columns: columns,
+                selection: {
+                    mode: mode,
+                    ids: mode === 'ids' ? parseSelectedIds() : []
+                },
+                estimated_rows: estimatedRowsValue,
+                delivery: delivery
+            };
+
+            const query = buildQuery(definition);
+            if (query) {
+                payload.query = query;
+            }
+            return payload;
+        }
+
+        function triggerExport() {
+            const statusEl = document.getElementById('exportStatus');
+            const btn = document.getElementById('exportBtn');
+
+            statusEl.className = 'status loading';
+            statusEl.textContent = 'Starting export...';
+            btn.disabled = true;
+
+            fetch('/admin/exports', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(buildExportRequest())
+            })
+            .then(response => {
+                if (response.status === 202) {
+                    return response.json().then(data => ({ async: true, data }));
+                }
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.error || 'Export failed'); });
+                }
+                const exportId = response.headers.get('X-Export-Id');
+                return response.blob().then(blob => ({ async: false, blob, exportId }));
+            })
+            .then(result => {
+                if (result.async) {
+                    handleAsyncExport(result.data);
+                    return;
+                }
+                const { blob, exportId } = result;
+                const definition = document.getElementById('definition').value;
+                const format = document.getElementById('format').value;
+
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${definition}-export.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+
+                statusEl.className = 'status success';
+                statusEl.textContent = `Export completed! ID: ${exportId || 'N/A'}`;
+                btn.disabled = false;
+
+                loadHistory();
+            })
+            .catch(error => {
+                statusEl.className = 'status error';
+                statusEl.textContent = `Export failed: ${error.message}`;
+                btn.disabled = false;
+            });
+        }
+
+        function handleAsyncExport(data) {
+            const statusEl = document.getElementById('exportStatus');
+            const btn = document.getElementById('exportBtn');
+            const exportId = data.id;
+            if (!exportId) {
+                statusEl.className = 'status error';
+                statusEl.textContent = 'Export failed: missing export ID';
+                btn.disabled = false;
+                return;
+            }
+            statusEl.className = 'status loading';
+            statusEl.textContent = `Export queued. ID: ${exportId}`;
+            pollExport(exportId, 0);
+        }
+
+        function pollExport(exportId, attempt) {
+            const statusEl = document.getElementById('exportStatus');
+            const btn = document.getElementById('exportBtn');
+            const maxAttempts = 30;
+
+            if (attempt >= maxAttempts) {
+                statusEl.className = 'status error';
+                statusEl.textContent = 'Export polling timed out.';
+                btn.disabled = false;
+                return;
+            }
+
+            fetch(`/admin/exports/${exportId}`)
+                .then(response => response.json())
+                .then(record => {
+                    if (record.State === 'completed') {
+                        statusEl.className = 'status success';
+                        statusEl.textContent = `Export ready! Downloading ${exportId}...`;
+                        btn.disabled = false;
+                        downloadExport(exportId);
+                        loadHistory();
+                        return;
+                    }
+                    if (record.State === 'failed' || record.State === 'canceled') {
+                        statusEl.className = 'status error';
+                        statusEl.textContent = `Export ${record.State}.`;
+                        btn.disabled = false;
+                        return;
+                    }
+                    statusEl.className = 'status loading';
+                    statusEl.textContent = `Export ${record.State}...`;
+                    setTimeout(() => pollExport(exportId, attempt + 1), 1000);
+                })
+                .catch(error => {
+                    statusEl.className = 'status error';
+                    statusEl.textContent = `Polling failed: ${error.message}`;
+                    btn.disabled = false;
+                });
+        }
+
+        function loadHistory() {
+            const container = document.getElementById('historyContainer');
+            container.innerHTML = '<div class="empty-state">Loading...</div>';
+
+            fetch('/admin/exports')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.exports || data.exports.length === 0) {
+                        container.innerHTML = '<div class="empty-state">No exports yet</div>';
+                        return;
+                    }
+
+                    const html = `
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Definition</th>
+                                    <th>Format</th>
+                                    <th>Status</th>
+                                    <th>Rows</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.exports.map(exp => `
+                                    <tr>
+                                        <td><code>${exp.ID.slice(0, 8)}...</code></td>
+                                        <td>${exp.Definition}</td>
+                                        <td>${exp.Format}</td>
+                                        <td><span class="badge badge-${exp.State}">${exp.State}</span></td>
+                                        <td>${exp.Counts?.Processed || 0}</td>
+                                        <td>${new Date(exp.CreatedAt).toLocaleString()}</td>
+                                        <td class="actions">
+                                            ${exp.State === 'completed' ? `<button onclick="downloadExport('${exp.ID}')">Download</button>` : ''}
+                                            <button class="btn-secondary" onclick="deleteExport('${exp.ID}')">Delete</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                    container.innerHTML = html;
+                })
+                .catch(error => {
+                    container.innerHTML = `<div class="empty-state">Error loading history: ${error.message}</div>`;
+                });
+        }
+
+        function downloadExport(id) {
+            window.location.href = `/admin/exports/${id}/download`;
+        }
+
+        function deleteExport(id) {
+            if (!confirm('Are you sure you want to delete this export?')) {
+                return;
+            }
+
+            fetch(`/admin/exports/${id}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(() => {
+                    loadHistory();
+                })
+                .catch(error => {
+                    alert(`Delete failed: ${error.message}`);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateColumns();
+            loadHistory();
+        });
+    </script>
+</body>
+</html>
