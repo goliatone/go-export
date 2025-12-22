@@ -1,0 +1,146 @@
+#!/bin/bash
+
+# Check for -debug flag
+if [[ $* == *-debug* ]]; then
+    set -x
+fi
+
+export LGR_NO_TIMESTAMP=true
+
+VERSION_FILE="./.version"
+
+# If we have a .taskenv file load it as source
+# the file should be e.g.
+# #!/bin/bash
+# export DATABASE_URL="..."
+if [ -f .taskenv ]; then
+    # shellcheck disable=SC1091
+    source .taskenv
+fi
+
+# This makes all bin packages installed via npm available here
+# e.g. bogota, nyc, autocannon, etc.
+PATH=$(pwd)/node_modules/.bin:$PATH
+
+# This will make all scripts available in the ./src/bin directory
+PATH=$(pwd)/src/bin:$PATH
+
+
+#################################################
+# Development dependencies
+#################################################
+
+function _install:lgr {
+    mkdir -p bin
+    if hash lgr 2>/dev/null; then
+        lgr OK "lgr already installed..."
+    else
+        if [[ $(command -v brew) == "" ]]; then
+            echo "Installing lgr"
+            brew tap goliatone/homebrew-tap
+            brew install lgr
+            lgr OK "lgr installed..."
+        else
+            LGR_VERSION="0.1.1"
+            LGR_FILENAME="lgr_${LGR_VERSION}_linux_x86_64.tar.gz"
+            curl -sL "https://github.com/goliatone/lgr/releases/download/v${LGR_VERSION}/${LGR_FILENAME}" | tar xz
+            chmod +x lgr
+            lgr OK "lgr installed"
+        fi
+    fi
+}
+
+function _install:changelog {
+    if git-cliff lgr 2>/dev/null; then
+        lgr OK "git-cliff already installed..."
+    else
+        echo "Installing lgr"
+        brew install brew install orhun/git-cliff/git-cliff
+        lgr OK "git-cliff installed..."
+    fi
+}
+
+function _install:brew {
+    if [[ $(command -v brew) == "" ]]; then
+        lgr I "Installing Hombrew"
+        /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+    else
+        lgr I "Updating Homebrew"
+        brew update
+    fi
+}
+
+function _install:envset {
+    if hash envset 2>/dev/null; then
+        lgr OK "envset installed..."
+    else
+        lgr I "Installing envset..."
+        brew install envset
+        lgr OK "envset installed..."
+    fi
+}
+
+function lgr {
+  if command -v lgr >/dev/null 2>&1; then
+    command lgr "$@"
+  else
+    printf '%s\n' "$*"
+  fi
+}
+
+##########################################
+# Application management
+##########################################
+
+function dev:install {
+    cd "$(pwd)/src" || exit "$?"
+
+    _install:lgr
+    _install:brew
+
+    _install:envset
+    _install:changelog
+
+    lgr ok "dependencies intalled..."
+}
+
+function dev:env:load {
+    eval "$(envset development --isolated=true)"
+}
+
+
+function dev:serve {
+    export EXPORT_PDF_ENABLED=true;
+    export EXPORT_PDF_ENGINE=chromium;
+    export EXPORT_PDF_CHROMIUM_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+    export EXPORT_PDF_CHROMIUM_ARGS="--no-sandbox,--disable-dev-shm-usage,--disable-gpu"
+    go run .
+}
+
+##########################################
+# Help and auxiliary functions
+##########################################
+
+## Show function code
+function help:show {
+    declare -f "$1"
+}
+
+function help {
+    echo ""
+    echo "$0 <task> [...arguments]"
+    echo ""
+    echo "Project: ${PROJECT}"
+    echo ""
+    echo "Tasks:"
+    compgen -A function | grep -v '^_' | cat -n
+    echo ""
+
+    prog="$0"
+    me=$(basename "$prog")
+
+    grep -e '^##[[:space:]]' -e '^##$' "$prog" | sed -e 's/^##//' -e "s/_PROG_/$me/" 2>&1 | less
+}
+
+TIMEFORMAT="Task completed in %3lR"
+time "${@:-help}"
