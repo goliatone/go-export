@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <style>
+    :root {
+      --ink-900: #1b1f2a;
+      --ink-700: #3b4252;
+      --ink-500: #5e6573;
+      --surface-0: #f7f1e8;
+      --surface-1: #fffdf8;
+      --surface-2: #f1e6d8;
+      --line: #e3d6c7;
+      --accent: #d06b2c;
+      --accent-strong: #b5541a;
+      --accent-quiet: rgba(208, 107, 44, 0.12);
+      --shadow: 0 18px 50px rgba(27, 31, 42, 0.12);
+      --shadow-soft: 0 8px 24px rgba(27, 31, 42, 0.08);
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-sm: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 28px 20px 60px;
+      font-family: "Space Grotesk", "Avenir Next", Avenir, "Segoe UI", sans-serif;
+      color: var(--ink-900);
+      background:
+        radial-gradient(1200px 600px at 10% 0%, #fdf5ea 0%, transparent 60%),
+        radial-gradient(900px 520px at 90% 20%, #f0e0d1 0%, transparent 55%),
+        linear-gradient(180deg, var(--surface-0), #efe5d8);
+      min-height: 100vh;
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 14px 16px;
+      margin: 0 auto 24px;
+      max-width: 1100px;
+      background: rgba(255, 253, 248, 0.92);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(8px);
+      animation: slideDown 0.5s ease-out;
+    }
+
+    .toolbar button,
+    .toolbar a {
+      padding: 10px 18px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    .toolbar button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fffaf2;
+      box-shadow: 0 10px 18px rgba(208, 107, 44, 0.28);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-strong);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--ink-700);
+      border: 1px solid var(--line);
+    }
+
+    .btn-ghost:hover {
+      background: var(--accent-quiet);
+      transform: translateY(-1px);
+    }
+
+    .report {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: var(--surface-1);
+      border-radius: var(--radius-lg);
+      padding: 40px 36px 32px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(227, 214, 199, 0.6);
+      position: relative;
+      overflow: hidden;
+      animation: riseIn 0.6s ease-out;
+    }
+
+    .report::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 280px;
+      height: 140px;
+      background: linear-gradient(135deg, rgba(208, 107, 44, 0.16), transparent 70%);
+      pointer-events: none;
+    }
+
+    .report-header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 18px;
+      margin-bottom: 24px;
+    }
+
+    .report-header h1 {
+      margin: 0;
+      font-size: clamp(24px, 3vw, 34px);
+      letter-spacing: -0.02em;
+      color: var(--ink-900);
+    }
+
+    .report-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--ink-500);
+      font-size: 14px;
+    }
+
+    .meta-chip {
+      background: #fff5ea;
+      border: 1px solid rgba(208, 107, 44, 0.2);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-weight: 600;
+      color: var(--accent-strong);
+    }
+
+    .report-header-extra {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--ink-500);
+    }
+
+    .meta-line {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+    }
+
+    .meta-label {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 10px;
+      color: var(--ink-500);
+    }
+
+    .meta-value {
+      color: var(--ink-700);
+    }
+
+    #chart {
+      height: 380px;
+      margin: 6px 0 26px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(120deg, #fff8f1, #f4eadf);
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      page-break-inside: auto;
+    }
+
+    thead {
+      display: table-header-group;
+    }
+
+    tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 12px 10px;
+      background: var(--surface-2);
+      color: var(--ink-700);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    tbody td {
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(227, 214, 199, 0.6);
+      color: var(--ink-700);
+    }
+
+    tbody tr:nth-child(even) td {
+      background: rgba(240, 230, 215, 0.4);
+    }
+
+    tbody tr:hover td {
+      background: rgba(208, 107, 44, 0.08);
+    }
+
+    .report-footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px dashed var(--line);
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--ink-500);
+    }
+
+    .loading {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(247, 241, 232, 0.9);
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+    }
+
+    .loading.active {
+      display: flex;
+    }
+
+    .loading-card {
+      background: var(--surface-1);
+      border-radius: var(--radius-md);
+      padding: 20px 26px;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow-soft);
+      text-align: center;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 3px solid rgba(208, 107, 44, 0.2);
+      border-top-color: var(--accent);
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 20px 14px 40px;
+      }
+
+      .report {
+        padding: 28px 20px 24px;
+      }
+
+      .toolbar {
+        padding: 12px;
+      }
+    }
+
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+
+      .toolbar,
+      .loading {
+        display: none !important;
+      }
+
+      .report {
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        max-width: none;
+      }
+
+      table {
+        page-break-inside: auto;
+      }
+
+      thead {
+        display: table-header-group;
+      }
+
+      tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes riseIn {
+      from {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+  {% if theme %}
+  <style>
+    :root {
+      {% for key, value in theme %}
+      --{{ key }}: {{ value }};
+      {% endfor %}
+    }
+  </style>
+  {% endif %}
+</head>
+<body{% if layout %} data-layout="{{ layout }}"{% endif %}{% if template_name %} data-template="{{ template_name }}"{% endif %}>
+  <div class="toolbar">
+    <button class="btn-primary" type="button" onclick="downloadPDF()">
+      Download PDF
+    </button>
+    <button class="btn-ghost" type="button" onclick="window.print()">
+      Print
+    </button>
+    {% if data.download_url %}
+    <a class="btn-ghost" href="{{ data.download_url }}">
+      Download Raw Data
+    </a>
+    {% elif data.export_id %}
+    <a class="btn-ghost" href="/admin/exports/{{ data.export_id }}/download">
+      Download Raw Data
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="loading-card" role="status" aria-live="polite">
+      <div class="spinner"></div>
+      <div>Preparing PDF...</div>
+    </div>
+  </div>
+
+  <div id="report" class="report">
+    <div class="report-header">
+      <h1>{{ title }}</h1>
+      <div class="report-meta">
+        <span class="meta-chip">{{ definition }}</span>
+        <span>{{ row_count }} records</span>
+        <span>Generated {{ generated }}</span>
+      </div>
+      {% if header %}
+      <div class="report-header-extra">
+        {% for key, value in header %}
+        <div class="meta-line">
+          <span class="meta-label">{{ key }}</span>
+          <span class="meta-value">{{ value }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    {% if chart_config %}
+    <div id="chart"></div>
+    {% endif %}
+
+    <table>
+      <thead>
+        <tr>
+          {% for col in columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          {% for cell in row %}
+          <td>{{ cell }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if footer %}
+    <div class="report-footer">
+      {% for key, value in footer %}
+      <div class="meta-line">
+        <span class="meta-label">{{ key }}</span>
+        <span class="meta-value">{{ value }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% set assets_host = "/exports/assets/pdf/" %}
+  {% if data and data.pdf_assets_host %}
+  {% set assets_host = data.pdf_assets_host %}
+  {% endif %}
+  <script src="{{ assets_host }}echarts.min.js"></script>
+  <script src="{{ assets_host }}jspdf.umd.min.js"></script>
+  <script src="{{ assets_host }}html2canvas.min.js"></script>
+  <script>
+    let chartReady = Promise.resolve();
+
+    {% if chart_config %}
+    const chartDom = document.getElementById('chart');
+    const chart = echarts.init(chartDom);
+    const chartConfig = {{ chart_config | to_json }};
+
+    chart.setOption({
+      title: { text: chartConfig.title || '' },
+      tooltip: { trigger: 'axis' },
+      legend: { show: true },
+      xAxis: { type: 'category', data: chartConfig.x_axis || [] },
+      yAxis: { type: 'value' },
+      series: (chartConfig.series || []).map((series) => ({
+        name: series.name,
+        type: chartConfig.type || 'bar',
+        data: series.data || [],
+        smooth: true
+      }))
+    });
+
+    chartReady = new Promise((resolve) => {
+      let resolved = false;
+      const finish = () => {
+        if (resolved) return;
+        resolved = true;
+        resolve();
+      };
+      chart.on('finished', finish);
+      setTimeout(finish, 600);
+    });
+
+    window.addEventListener('resize', () => chart.resize());
+    {% endif %}
+
+    async function downloadPDF() {
+      const loading = document.getElementById('loading');
+      const button = document.querySelector('.btn-primary');
+
+      if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
+        alert('PDF libraries are not available. Please use the Print option.');
+        return;
+      }
+
+      loading.classList.add('active');
+      if (button) {
+        button.disabled = true;
+      }
+
+      try {
+        await chartReady;
+        if (document.fonts && document.fonts.ready) {
+          await document.fonts.ready;
+        }
+
+        const element = document.getElementById('report');
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#fffdf8'
+        });
+
+        const pdf = new window.jspdf.jsPDF({
+          orientation: canvas.width > canvas.height ? 'l' : 'p',
+          unit: 'mm',
+          format: 'a4'
+        });
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 10;
+        const maxWidth = pageWidth - margin * 2;
+        const maxHeight = pageHeight - margin * 2;
+
+        const scale = maxWidth / canvas.width;
+        const pageHeightPx = Math.floor(maxHeight / scale);
+        let offset = 0;
+        let page = 0;
+
+        while (offset < canvas.height) {
+          const sliceHeight = Math.min(pageHeightPx, canvas.height - offset);
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = canvas.width;
+          pageCanvas.height = sliceHeight;
+
+          const ctx = pageCanvas.getContext('2d');
+          ctx.fillStyle = '#fffdf8';
+          ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+          ctx.drawImage(
+            canvas,
+            0,
+            offset,
+            canvas.width,
+            sliceHeight,
+            0,
+            0,
+            canvas.width,
+            sliceHeight
+          );
+
+          const imgData = pageCanvas.toDataURL('image/png');
+          if (page > 0) {
+            pdf.addPage();
+          }
+
+          const imgHeight = sliceHeight * scale;
+          pdf.addImage(imgData, 'PNG', margin, margin, maxWidth, imgHeight);
+
+          offset += sliceHeight;
+          page += 1;
+        }
+
+        const definition = {{ definition | to_json }};
+        const filename = (definition || 'export') + '-export.pdf';
+        pdf.save(filename);
+      } catch (error) {
+        console.error('PDF generation failed:', error);
+        alert('Failed to generate PDF. Please try the Print option instead.');
+      } finally {
+        loading.classList.remove('active');
+        if (button) {
+          button.disabled = false;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
