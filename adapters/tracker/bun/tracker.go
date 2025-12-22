@@ -317,6 +317,7 @@ type recordModel struct {
 	BytesWritten           int64     `bun:"bytes_written"`
 	ArtifactKey            string    `bun:"artifact_key"`
 	ArtifactMeta           []byte    `bun:"artifact_meta"`
+	RequestPayload         []byte    `bun:"request_payload"`
 	CreatedAt              time.Time `bun:"created_at"`
 	StartedAt              time.Time `bun:"started_at,nullzero"`
 	CompletedAt            time.Time `bun:"completed_at,nullzero"`
@@ -335,6 +336,16 @@ func modelFromRecord(record export.ExportRecord) (recordModel, error) {
 	meta, err := json.Marshal(record.Artifact.Meta)
 	if err != nil {
 		return recordModel{}, err
+	}
+	var requestPayload []byte
+	if record.Request.Definition != "" {
+		req := record.Request
+		req.Output = nil
+		req.IdempotencyKey = ""
+		requestPayload, err = json.Marshal(req)
+		if err != nil {
+			return recordModel{}, err
+		}
 	}
 
 	return recordModel{
@@ -355,6 +366,7 @@ func modelFromRecord(record export.ExportRecord) (recordModel, error) {
 		BytesWritten:           record.BytesWritten,
 		ArtifactKey:            record.Artifact.Key,
 		ArtifactMeta:           meta,
+		RequestPayload:         requestPayload,
 		CreatedAt:              record.CreatedAt,
 		StartedAt:              record.StartedAt,
 		CompletedAt:            record.CompletedAt,
@@ -406,6 +418,11 @@ func (m recordModel) toRecord() (export.ExportRecord, error) {
 	}
 	if len(m.ArtifactMeta) > 0 {
 		if err := json.Unmarshal(m.ArtifactMeta, &record.Artifact.Meta); err != nil {
+			return export.ExportRecord{}, err
+		}
+	}
+	if len(m.RequestPayload) > 0 {
+		if err := json.Unmarshal(m.RequestPayload, &record.Request); err != nil {
 			return export.ExportRecord{}, err
 		}
 	}
