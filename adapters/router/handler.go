@@ -33,6 +33,7 @@ func (h *Handler) RegisterRoutes(router any) {
 	r.Get(base+"/", h.Handle)
 	r.Get(base+"/:id", h.Handle)
 	r.Get(base+"/:id/download", h.Handle)
+	r.Get(base+"/:id/preview", h.Handle)
 	r.Delete(base+"/:id", h.Handle)
 }
 
