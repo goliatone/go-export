@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/goliatone/go-export/export"
@@ -65,7 +66,7 @@ func (d JSONRequestDecoder) Decode(req Request) (export.ExportRequest, error) {
 	reqModel := export.ExportRequest{
 		Definition:        payload.Definition,
 		SourceVariant:     payload.SourceVariant,
-		Format:            payload.Format,
+		Format:            normalizeFormat(payload.Format),
 		Query:             query,
 		Selection:         payload.Selection.toSelection(),
 		Columns:           payload.Columns,
@@ -80,6 +81,16 @@ func (d JSONRequestDecoder) Decode(req Request) (export.ExportRequest, error) {
 	}
 
 	return reqModel, nil
+}
+
+func normalizeFormat(format export.Format) export.Format {
+	normalized := strings.ToLower(strings.TrimSpace(string(format)))
+	switch normalized {
+	case "excel", "xls":
+		return export.FormatXLSX
+	default:
+		return export.Format(normalized)
+	}
 }
 
 type requestPayload struct {
@@ -100,19 +111,33 @@ type requestPayload struct {
 }
 
 type selectionPayload struct {
-	Mode export.SelectionMode `json:"mode,omitempty"`
-	IDs  []string             `json:"ids,omitempty"`
+	Mode  export.SelectionMode   `json:"mode,omitempty"`
+	IDs   []string               `json:"ids,omitempty"`
+	Query *selectionQueryPayload `json:"query,omitempty"`
 }
 
 func (p selectionPayload) toSelection() export.Selection {
-	return export.Selection{Mode: p.Mode, IDs: p.IDs}
+	selection := export.Selection{Mode: p.Mode, IDs: p.IDs}
+	if p.Query != nil {
+		selection.Query = export.SelectionQueryRef{
+			Name:   p.Query.Name,
+			Params: p.Query.Params,
+		}
+	}
+	return selection
+}
+
+type selectionQueryPayload struct {
+	Name   string         `json:"name"`
+	Params map[string]any `json:"params,omitempty"`
 }
 
 type renderOptionsPayload struct {
-	CSV    csvOptionsPayload    `json:"csv,omitempty"`
-	JSON   jsonOptionsPayload   `json:"json,omitempty"`
-	XLSX   xlsxOptionsPayload   `json:"xlsx,omitempty"`
-	Format formatOptionsPayload `json:"format,omitempty"`
+	CSV      csvOptionsPayload      `json:"csv,omitempty"`
+	JSON     jsonOptionsPayload     `json:"json,omitempty"`
+	Template templateOptionsPayload `json:"template,omitempty"`
+	XLSX     xlsxOptionsPayload     `json:"xlsx,omitempty"`
+	Format   formatOptionsPayload   `json:"format,omitempty"`
 }
 
 func (p renderOptionsPayload) toRenderOptions() export.RenderOptions {
@@ -125,6 +150,15 @@ func (p renderOptionsPayload) toRenderOptions() export.RenderOptions {
 		JSON: export.JSONOptions{
 			Mode: p.JSON.Mode,
 		},
+	Template: export.TemplateOptions{
+		Strategy:    p.Template.Strategy,
+		MaxRows:     p.Template.MaxRows,
+		Title:       p.Template.Title,
+		Definition:  p.Template.Definition,
+		GeneratedAt: p.Template.GeneratedAt,
+		ChartConfig: p.Template.ChartConfig,
+		Data:        p.Template.Data,
+	},
 		XLSX: export.XLSXOptions{
 			IncludeHeaders: p.XLSX.IncludeHeaders,
 			HeadersSet:     p.XLSX.HeadersSet,
@@ -147,6 +181,16 @@ type csvOptionsPayload struct {
 
 type jsonOptionsPayload struct {
 	Mode export.JSONMode `json:"mode,omitempty"`
+}
+
+type templateOptionsPayload struct {
+	Strategy    export.TemplateStrategy `json:"strategy,omitempty"`
+	MaxRows     int                     `json:"max_rows,omitempty"`
+	Title       string                  `json:"title,omitempty"`
+	Definition  string                  `json:"definition,omitempty"`
+	GeneratedAt time.Time               `json:"generated_at,omitempty"`
+	ChartConfig any                     `json:"chart_config,omitempty"`
+	Data        map[string]any          `json:"data,omitempty"`
 }
 
 type xlsxOptionsPayload struct {
