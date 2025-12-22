@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"sync/atomic"
+	"time"
 
 	"github.com/goliatone/go-export/export"
 )
@@ -28,14 +29,14 @@ type BufferedStrategy struct {
 }
 
 func (s BufferedStrategy) Render(ctx context.Context, tmpl TemplateExecutor, name string, schema export.Schema, rows export.RowIterator, w io.Writer, opts export.RenderOptions) (export.RenderStats, error) {
-	_ = opts
-
 	maxRows := s.MaxRows
 	if maxRows <= 0 {
 		maxRows = DefaultMaxBufferedRows
 	}
 
 	data := TemplateData{Schema: schema}
+	data.Columns = templateColumns(schema)
+	data.TemplateMeta = templateMetaFromOptions(opts)
 	for {
 		if err := ctx.Err(); err != nil {
 			return export.RenderStats{}, err
@@ -53,6 +54,7 @@ func (s BufferedStrategy) Render(ctx context.Context, tmpl TemplateExecutor, nam
 		}
 		data.Rows = append(data.Rows, row)
 	}
+	data.RowCount = len(data.Rows)
 
 	cw := &countingWriter{w: w}
 	if err := tmpl.ExecuteTemplate(cw, name, data); err != nil {
@@ -69,8 +71,6 @@ func (s BufferedStrategy) Render(ctx context.Context, tmpl TemplateExecutor, nam
 type StreamingStrategy struct{}
 
 func (s StreamingStrategy) Render(ctx context.Context, tmpl TemplateExecutor, name string, schema export.Schema, rows export.RowIterator, w io.Writer, opts export.RenderOptions) (export.RenderStats, error) {
-	_ = opts
-
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -115,7 +115,12 @@ func (s StreamingStrategy) Render(ctx context.Context, tmpl TemplateExecutor, na
 		}
 	}()
 
-	data := templateStreamData{Schema: schema, Rows: rowsCh}
+	data := templateStreamData{
+		Schema:       schema,
+		Columns:      templateColumns(schema),
+		TemplateMeta: templateMetaFromOptions(opts),
+		Rows:         rowsCh,
+	}
 	cw := &countingWriter{w: w}
 	if err := tmpl.ExecuteTemplate(cw, name, data); err != nil {
 		close(done)
@@ -140,8 +145,11 @@ func (s StreamingStrategy) Render(ctx context.Context, tmpl TemplateExecutor, na
 }
 
 type templateStreamData struct {
-	Schema export.Schema
-	Rows   <-chan export.Row
+	Schema   export.Schema     `json:"schema"`
+	Columns  []string          `json:"columns"`
+	Rows     <-chan export.Row `json:"rows"`
+	RowCount int               `json:"row_count"`
+	TemplateMeta
 }
 
 type countingWriter struct {
@@ -153,4 +161,39 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 	n, err := cw.w.Write(p)
 	cw.count += int64(n)
 	return n, err
+}
+
+func templateColumns(schema export.Schema) []string {
+	columns := make([]string, 0, len(schema.Columns))
+	for _, col := range schema.Columns {
+		label := col.Label
+		if label == "" {
+			label = col.Name
+		}
+		columns = append(columns, label)
+	}
+	return columns
+}
+
+func templateMetaFromOptions(opts export.RenderOptions) TemplateMeta {
+	meta := TemplateMeta{
+		TemplateName: opts.Template.TemplateName,
+		Layout:       opts.Template.Layout,
+		Title:        opts.Template.Title,
+		Definition:   opts.Template.Definition,
+		GeneratedAt:  opts.Template.GeneratedAt,
+		ChartConfig:  opts.Template.ChartConfig,
+		Theme:        opts.Template.Theme,
+		Header:       opts.Template.Header,
+		Footer:       opts.Template.Footer,
+		Data:         opts.Template.Data,
+	}
+	if meta.Title == "" {
+		meta.Title = meta.Definition
+	}
+	if meta.GeneratedAt.IsZero() {
+		meta.GeneratedAt = time.Now()
+	}
+	meta.Generated = meta.GeneratedAt.Format(time.RFC3339)
+	return meta
 }
