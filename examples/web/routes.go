@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gofiber/fiber/v2"
 	exportrouter "github.com/goliatone/go-export/adapters/router"
+	"github.com/goliatone/go-export/export"
 	"github.com/goliatone/go-router"
 )
 
@@ -10,6 +11,9 @@ import (
 func (a *App) SetupRoutes(r router.Router[*fiber.App]) {
 	// Static assets
 	r.Static("/public", "./public")
+	r.Static(export.DefaultPDFAssetsPath, "", router.Static{
+		FS: export.PDFAssetsFS(),
+	})
 
 	// Home page
 	r.Get("/", a.renderHome())
