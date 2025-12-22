@@ -150,15 +150,20 @@ func (p renderOptionsPayload) toRenderOptions() export.RenderOptions {
 		JSON: export.JSONOptions{
 			Mode: p.JSON.Mode,
 		},
-	Template: export.TemplateOptions{
-		Strategy:    p.Template.Strategy,
-		MaxRows:     p.Template.MaxRows,
-		Title:       p.Template.Title,
-		Definition:  p.Template.Definition,
-		GeneratedAt: p.Template.GeneratedAt,
-		ChartConfig: p.Template.ChartConfig,
-		Data:        p.Template.Data,
-	},
+		Template: export.TemplateOptions{
+			Strategy:     p.Template.Strategy,
+			MaxRows:      p.Template.MaxRows,
+			TemplateName: p.Template.TemplateName,
+			Layout:       p.Template.Layout,
+			Title:        p.Template.Title,
+			Definition:   p.Template.Definition,
+			GeneratedAt:  p.Template.GeneratedAt,
+			ChartConfig:  p.Template.ChartConfig,
+			Theme:        p.Template.Theme,
+			Header:       p.Template.Header,
+			Footer:       p.Template.Footer,
+			Data:         p.Template.Data,
+		},
 		XLSX: export.XLSXOptions{
 			IncludeHeaders: p.XLSX.IncludeHeaders,
 			HeadersSet:     p.XLSX.HeadersSet,
@@ -184,13 +189,18 @@ type jsonOptionsPayload struct {
 }
 
 type templateOptionsPayload struct {
-	Strategy    export.TemplateStrategy `json:"strategy,omitempty"`
-	MaxRows     int                     `json:"max_rows,omitempty"`
-	Title       string                  `json:"title,omitempty"`
-	Definition  string                  `json:"definition,omitempty"`
-	GeneratedAt time.Time               `json:"generated_at,omitempty"`
-	ChartConfig any                     `json:"chart_config,omitempty"`
-	Data        map[string]any          `json:"data,omitempty"`
+	Strategy     export.TemplateStrategy `json:"strategy,omitempty"`
+	MaxRows      int                     `json:"max_rows,omitempty"`
+	TemplateName string                  `json:"template_name,omitempty"`
+	Layout       string                  `json:"layout,omitempty"`
+	Title        string                  `json:"title,omitempty"`
+	Definition   string                  `json:"definition,omitempty"`
+	GeneratedAt  time.Time               `json:"generated_at,omitempty"`
+	ChartConfig  any                     `json:"chart_config,omitempty"`
+	Theme        map[string]any          `json:"theme,omitempty"`
+	Header       map[string]any          `json:"header,omitempty"`
+	Footer       map[string]any          `json:"footer,omitempty"`
+	Data         map[string]any          `json:"data,omitempty"`
 }
 
 type xlsxOptionsPayload struct {
