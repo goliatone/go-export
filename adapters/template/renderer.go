@@ -2,8 +2,8 @@ package exporttemplate
 
 import (
 	"context"
-	"html/template"
 	"io"
+	"time"
 
 	"github.com/goliatone/go-export/export"
 )
@@ -11,19 +11,31 @@ import (
 // Renderer renders templated HTML exports.
 type Renderer struct {
 	Enabled      bool
-	Templates    *template.Template
+	Templates    TemplateExecutor
 	TemplateName string
+	Strategy     Strategy
 }
 
 // TemplateData is the context passed to templates.
+type TemplateMeta struct {
+	Title       string         `json:"title,omitempty"`
+	Definition  string         `json:"definition,omitempty"`
+	Generated   string         `json:"generated,omitempty"`
+	GeneratedAt time.Time      `json:"generated_at,omitempty"`
+	ChartConfig any            `json:"chart_config,omitempty"`
+	Data        map[string]any `json:"data,omitempty"`
+}
+
 type TemplateData struct {
-	Schema export.Schema
-	Rows   []export.Row
+	Schema   export.Schema `json:"schema"`
+	Columns  []string      `json:"columns"`
+	Rows     []export.Row  `json:"rows"`
+	RowCount int           `json:"row_count"`
+	TemplateMeta
 }
 
 // Render executes a template with the provided rows.
 func (r Renderer) Render(ctx context.Context, schema export.Schema, rows export.RowIterator, w io.Writer, opts export.RenderOptions) (export.RenderStats, error) {
-	_ = opts
 	if !r.Enabled {
 		return export.RenderStats{}, export.NewError(export.KindNotImpl, "template renderer is disabled", nil)
 	}
@@ -36,40 +48,30 @@ func (r Renderer) Render(ctx context.Context, schema export.Schema, rows export.
 		name = "export"
 	}
 
-	data := TemplateData{Schema: schema}
-	for {
-		if err := ctx.Err(); err != nil {
-			return export.RenderStats{}, err
-		}
-
-		row, err := rows.Next(ctx)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return export.RenderStats{}, err
-		}
-		data.Rows = append(data.Rows, row)
-	}
-
-	cw := &countingWriter{w: w}
-	if err := r.Templates.ExecuteTemplate(cw, name, data); err != nil {
+	strategy, err := r.resolveStrategy(opts)
+	if err != nil {
 		return export.RenderStats{}, err
 	}
-
-	return export.RenderStats{
-		Rows:  int64(len(data.Rows)),
-		Bytes: cw.count,
-	}, nil
+	return strategy.Render(ctx, r.Templates, name, schema, rows, w, opts)
 }
 
-type countingWriter struct {
-	w     io.Writer
-	count int64
-}
+func (r Renderer) resolveStrategy(opts export.RenderOptions) (Strategy, error) {
+	if r.Strategy != nil {
+		return r.Strategy, nil
+	}
 
-func (cw *countingWriter) Write(p []byte) (int, error) {
-	n, err := cw.w.Write(p)
-	cw.count += int64(n)
-	return n, err
+	switch opts.Template.Strategy {
+	case "":
+	case export.TemplateStrategyBuffered:
+		return BufferedStrategy{MaxRows: opts.Template.MaxRows}, nil
+	case export.TemplateStrategyStreaming:
+		return StreamingStrategy{}, nil
+	default:
+		return nil, export.NewError(export.KindValidation, "unknown template strategy", nil)
+	}
+
+	if opts.Template.MaxRows > 0 {
+		return BufferedStrategy{MaxRows: opts.Template.MaxRows}, nil
+	}
+	return BufferedStrategy{}, nil
 }
