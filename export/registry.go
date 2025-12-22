@@ -63,8 +63,14 @@ func (r *DefinitionRegistry) Resolve(req ExportRequest) (ResolvedDefinition, err
 		if variant.DefaultFilename != "" {
 			resolved.DefaultFilename = variant.DefaultFilename
 		}
+		if len(variant.Transformers) > 0 {
+			resolved.Transformers = variant.Transformers
+		}
 		if variant.Policy != nil {
 			resolved.Policy = mergePolicy(def.Policy, *variant.Policy)
+		}
+		if variant.Template != nil {
+			resolved.Template = mergeTemplateOptions(resolved.Template, *variant.Template)
 		}
 	}
 
@@ -150,4 +156,70 @@ func (r *RendererRegistry) Resolve(format Format) (Renderer, bool) {
 	defer r.mu.RUnlock()
 	renderer, ok := r.renderers[format]
 	return renderer, ok
+}
+
+// TransformerFactory creates a RowTransformer from config.
+type TransformerFactory func(config TransformerConfig) (RowTransformer, error)
+
+// BufferedTransformerFactory creates a BufferedTransformer from config.
+type BufferedTransformerFactory func(config TransformerConfig) (BufferedTransformer, error)
+
+type transformerFactory struct {
+	streaming TransformerFactory
+	buffered  BufferedTransformerFactory
+}
+
+// TransformerRegistry stores transformers by key.
+type TransformerRegistry struct {
+	mu        sync.RWMutex
+	factories map[string]transformerFactory
+}
+
+// NewTransformerRegistry creates a registry.
+func NewTransformerRegistry() *TransformerRegistry {
+	return &TransformerRegistry{factories: make(map[string]transformerFactory)}
+}
+
+// Register adds a streaming transformer factory.
+func (r *TransformerRegistry) Register(key string, factory TransformerFactory) error {
+	if key == "" {
+		return NewError(KindValidation, "transformer key is required", nil)
+	}
+	if factory == nil {
+		return NewError(KindValidation, "transformer factory is required", nil)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.factories[key]; exists {
+		return NewError(KindValidation, fmt.Sprintf("transformer %q already registered", key), nil)
+	}
+	r.factories[key] = transformerFactory{streaming: factory}
+	return nil
+}
+
+// RegisterBuffered adds a buffered transformer factory.
+func (r *TransformerRegistry) RegisterBuffered(key string, factory BufferedTransformerFactory) error {
+	if key == "" {
+		return NewError(KindValidation, "transformer key is required", nil)
+	}
+	if factory == nil {
+		return NewError(KindValidation, "buffered transformer factory is required", nil)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.factories[key]; exists {
+		return NewError(KindValidation, fmt.Sprintf("transformer %q already registered", key), nil)
+	}
+	r.factories[key] = transformerFactory{buffered: factory}
+	return nil
+}
+
+// Resolve finds a transformer factory by key.
+func (r *TransformerRegistry) Resolve(key string) (transformerFactory, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	factory, ok := r.factories[key]
+	return factory, ok
 }
