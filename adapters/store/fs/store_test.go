@@ -3,12 +3,22 @@ package storefs
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/goliatone/go-export/export"
 )
+
+type captureSigner struct {
+	input SignedURLInput
+}
+
+func (s *captureSigner) SignURL(input SignedURLInput) (string, error) {
+	s.input = input
+	return fmt.Sprintf("%s/%s?expires=%d", input.BaseURL, input.Key, input.ExpiresAt.Unix()), nil
+}
 
 func TestStore_PutOpenDelete(t *testing.T) {
 	root := t.TempDir()
@@ -60,5 +70,27 @@ func TestStore_SignedURL_NotConfigured(t *testing.T) {
 	}
 	if exportErr, ok := err.(*export.ExportError); !ok || exportErr.Kind != export.KindNotImpl {
 		t.Fatalf("expected not implemented error, got %v", err)
+	}
+}
+
+func TestStore_SignedURL(t *testing.T) {
+	store := NewStore(t.TempDir())
+	store.BaseURL = "https://example.test/exports"
+	signer := &captureSigner{}
+	store.Signer = signer
+	store.Now = func() time.Time {
+		return time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	}
+
+	url, err := store.SignedURL(context.Background(), "exports/test.csv", 5*time.Minute)
+	if err != nil {
+		t.Fatalf("signed url: %v", err)
+	}
+	expected := "https://example.test/exports/exports/test.csv?expires=1704110700"
+	if url != expected {
+		t.Fatalf("unexpected url: %q", url)
+	}
+	if signer.input.Key != "exports/test.csv" {
+		t.Fatalf("unexpected signer key: %q", signer.input.Key)
 	}
 }

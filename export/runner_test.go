@@ -160,6 +160,53 @@ func TestRunner_GuardBlocksOpen(t *testing.T) {
 	}
 }
 
+func TestRunner_SelectionDefaultAfterGuard(t *testing.T) {
+	order := []string{}
+	iter := &stubIterator{rows: []Row{{"1"}}}
+	source := &stubSource{order: &order, iter: iter}
+	guard := &stubGuard{order: &order}
+
+	policy := SelectionPolicyFunc(func(ctx context.Context, actor Actor, req ExportRequest, def ResolvedDefinition) (Selection, bool, error) {
+		_ = ctx
+		_ = actor
+		_ = req
+		_ = def
+		order = append(order, "selection")
+		return Selection{Mode: SelectionAll}, true, nil
+	})
+
+	runner := NewRunner()
+	runner.Guard = guard
+	if err := runner.Definitions.Register(ExportDefinition{
+		Name:            "users",
+		RowSourceKey:    "stub",
+		Schema:          Schema{Columns: []Column{{Name: "id"}}},
+		SelectionPolicy: policy,
+	}); err != nil {
+		t.Fatalf("register definition: %v", err)
+	}
+	if err := runner.RowSources.Register("stub", func(req ExportRequest, def ResolvedDefinition) (RowSource, error) {
+		_ = req
+		_ = def
+		return source, nil
+	}); err != nil {
+		t.Fatalf("register source: %v", err)
+	}
+
+	buf := &bytes.Buffer{}
+	_, err := runner.Run(context.Background(), ExportRequest{
+		Definition: "users",
+		Format:     FormatCSV,
+		Output:     buf,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(order) < 3 || order[0] != "guard" || order[1] != "selection" || order[2] != "open" {
+		t.Fatalf("expected guard, selection, open order, got %v", order)
+	}
+}
+
 func TestRunner_EndToEndFormats(t *testing.T) {
 	formats := []Format{FormatCSV, FormatJSON, FormatNDJSON}
 
@@ -216,6 +263,31 @@ func TestRunner_EndToEndFormats(t *testing.T) {
 				t.Fatalf("expected 2 ndjson lines, got %d", len(lines))
 			}
 		}
+	}
+}
+
+func TestRunner_AsyncDeliveryNotSupported(t *testing.T) {
+	runner := NewRunner()
+	if err := runner.Definitions.Register(ExportDefinition{
+		Name:         "users",
+		RowSourceKey: "stub",
+		Schema:       Schema{Columns: []Column{{Name: "id"}}},
+	}); err != nil {
+		t.Fatalf("register definition: %v", err)
+	}
+
+	buf := &bytes.Buffer{}
+	_, err := runner.Run(context.Background(), ExportRequest{
+		Definition: "users",
+		Format:     FormatCSV,
+		Delivery:   DeliveryAsync,
+		Output:     buf,
+	})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if got := AsGoError(err).TextCode; got != "not_implemented" {
+		t.Fatalf("expected not_implemented error, got %s", got)
 	}
 }
 

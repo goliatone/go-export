@@ -83,6 +83,52 @@ func newTestService(runner *export.Runner, id string) (export.Service, export.Pr
 	return svc, tracker, store
 }
 
+func seedPreviewRecord(t *testing.T, tracker export.ProgressTracker, store export.ArtifactStore, exportID string, state export.ExportState, contentType string) {
+	t.Helper()
+	ctx := context.Background()
+	ref := export.ArtifactRef{}
+	if state == export.StateCompleted {
+		var err error
+		ref, err = store.Put(ctx, "exports/"+exportID+".html", bytes.NewBufferString("<html><body>preview</body></html>"), export.ArtifactMeta{
+			Filename:    "export-preview.html",
+			ContentType: contentType,
+		})
+		if err != nil {
+			t.Fatalf("store put: %v", err)
+		}
+	}
+	if _, err := tracker.Start(ctx, export.ExportRecord{
+		ID:         exportID,
+		Definition: "users",
+		Format:     export.FormatTemplate,
+		State:      state,
+		Artifact:   ref,
+	}); err != nil {
+		t.Fatalf("tracker start: %v", err)
+	}
+}
+
+func assertErrorParity(t *testing.T, rec *httptest.ResponseRecorder, routerRec *httptest.ResponseRecorder) {
+	t.Helper()
+	if rec.Code != routerRec.Code {
+		t.Fatalf("status mismatch: http=%d router=%d", rec.Code, routerRec.Code)
+	}
+	if rec.Header().Get("Content-Type") != routerRec.Header().Get("Content-Type") {
+		t.Fatalf("content-type mismatch: http=%q router=%q", rec.Header().Get("Content-Type"), routerRec.Header().Get("Content-Type"))
+	}
+	var httpPayload exportapi.ErrorResponse
+	if err := json.NewDecoder(bytes.NewReader(rec.Body.Bytes())).Decode(&httpPayload); err != nil {
+		t.Fatalf("decode http response: %v", err)
+	}
+	var routerPayload exportapi.ErrorResponse
+	if err := json.NewDecoder(bytes.NewReader(routerRec.Body.Bytes())).Decode(&routerPayload); err != nil {
+		t.Fatalf("decode router response: %v", err)
+	}
+	if httpPayload != routerPayload {
+		t.Fatalf("payload mismatch: http=%+v router=%+v", httpPayload, routerPayload)
+	}
+}
+
 func TestTransportParity_SyncExport(t *testing.T) {
 	runner := newTestRunner(t)
 	actor := export.Actor{ID: "user-1"}
@@ -262,6 +308,123 @@ func TestTransportParity_Download(t *testing.T) {
 	if rec.Body.String() != routerCtx.recorder.Body.String() {
 		t.Fatalf("body mismatch: http=%q router=%q", rec.Body.String(), routerCtx.recorder.Body.String())
 	}
+}
+
+func TestTransportParity_Preview(t *testing.T) {
+	actor := export.Actor{ID: "user-1"}
+
+	t.Run("ok", func(t *testing.T) {
+		serviceHTTP, trackerHTTP, storeHTTP := newTestService(export.NewRunner(), "exp-preview")
+		serviceRouter, trackerRouter, storeRouter := newTestService(export.NewRunner(), "exp-preview")
+
+		seedPreviewRecord(t, trackerHTTP, storeHTTP, "exp-preview", export.StateCompleted, "text/html")
+		seedPreviewRecord(t, trackerRouter, storeRouter, "exp-preview", export.StateCompleted, "text/html")
+
+		cfgHTTP := exportapi.Config{
+			Service:       serviceHTTP,
+			Store:         storeHTTP,
+			ActorProvider: exporthttp.StaticActorProvider{Actor: actor},
+		}
+		cfgRouter := exportapi.Config{
+			Service:       serviceRouter,
+			Store:         storeRouter,
+			ActorProvider: exporthttp.StaticActorProvider{Actor: actor},
+		}
+
+		httpHandler := exporthttp.NewHandler(cfgHTTP)
+		routerHandler := NewHandler(cfgRouter)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/exports/exp-preview/preview", nil)
+		rec := httptest.NewRecorder()
+		httpHandler.ServeHTTP(rec, req)
+
+		routerCtx := newTestHTTPContext(http.MethodGet, "/admin/exports/exp-preview/preview", nil, nil, nil)
+		if err := routerHandler.Handle(routerCtx); err != nil {
+			t.Fatalf("router handle: %v", err)
+		}
+
+		if rec.Code != routerCtx.recorder.Code {
+			t.Fatalf("status mismatch: http=%d router=%d", rec.Code, routerCtx.recorder.Code)
+		}
+		if rec.Header().Get("Content-Type") != routerCtx.recorder.Header().Get("Content-Type") {
+			t.Fatalf("content-type mismatch: http=%q router=%q", rec.Header().Get("Content-Type"), routerCtx.recorder.Header().Get("Content-Type"))
+		}
+		if rec.Header().Get("Content-Disposition") != routerCtx.recorder.Header().Get("Content-Disposition") {
+			t.Fatalf("content-disposition mismatch: http=%q router=%q", rec.Header().Get("Content-Disposition"), routerCtx.recorder.Header().Get("Content-Disposition"))
+		}
+		if rec.Body.String() != routerCtx.recorder.Body.String() {
+			t.Fatalf("body mismatch: http=%q router=%q", rec.Body.String(), routerCtx.recorder.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "<html") {
+			t.Fatalf("expected html content, got %q", rec.Body.String())
+		}
+	})
+
+	t.Run("non-html", func(t *testing.T) {
+		serviceHTTP, trackerHTTP, storeHTTP := newTestService(export.NewRunner(), "exp-preview")
+		serviceRouter, trackerRouter, storeRouter := newTestService(export.NewRunner(), "exp-preview")
+
+		seedPreviewRecord(t, trackerHTTP, storeHTTP, "exp-preview", export.StateCompleted, "text/csv")
+		seedPreviewRecord(t, trackerRouter, storeRouter, "exp-preview", export.StateCompleted, "text/csv")
+
+		cfgHTTP := exportapi.Config{
+			Service:       serviceHTTP,
+			Store:         storeHTTP,
+			ActorProvider: exporthttp.StaticActorProvider{Actor: actor},
+		}
+		cfgRouter := exportapi.Config{
+			Service:       serviceRouter,
+			Store:         storeRouter,
+			ActorProvider: exporthttp.StaticActorProvider{Actor: actor},
+		}
+
+		httpHandler := exporthttp.NewHandler(cfgHTTP)
+		routerHandler := NewHandler(cfgRouter)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/exports/exp-preview/preview", nil)
+		rec := httptest.NewRecorder()
+		httpHandler.ServeHTTP(rec, req)
+
+		routerCtx := newTestHTTPContext(http.MethodGet, "/admin/exports/exp-preview/preview", nil, nil, nil)
+		if err := routerHandler.Handle(routerCtx); err != nil {
+			t.Fatalf("router handle: %v", err)
+		}
+
+		assertErrorParity(t, rec, routerCtx.recorder)
+	})
+
+	t.Run("not-completed", func(t *testing.T) {
+		serviceHTTP, trackerHTTP, storeHTTP := newTestService(export.NewRunner(), "exp-preview")
+		serviceRouter, trackerRouter, storeRouter := newTestService(export.NewRunner(), "exp-preview")
+
+		seedPreviewRecord(t, trackerHTTP, storeHTTP, "exp-preview", export.StateRunning, "text/html")
+		seedPreviewRecord(t, trackerRouter, storeRouter, "exp-preview", export.StateRunning, "text/html")
+
+		cfgHTTP := exportapi.Config{
+			Service:       serviceHTTP,
+			Store:         storeHTTP,
+			ActorProvider: exporthttp.StaticActorProvider{Actor: actor},
+		}
+		cfgRouter := exportapi.Config{
+			Service:       serviceRouter,
+			Store:         storeRouter,
+			ActorProvider: exporthttp.StaticActorProvider{Actor: actor},
+		}
+
+		httpHandler := exporthttp.NewHandler(cfgHTTP)
+		routerHandler := NewHandler(cfgRouter)
+
+		req := httptest.NewRequest(http.MethodGet, "/admin/exports/exp-preview/preview", nil)
+		rec := httptest.NewRecorder()
+		httpHandler.ServeHTTP(rec, req)
+
+		routerCtx := newTestHTTPContext(http.MethodGet, "/admin/exports/exp-preview/preview", nil, nil, nil)
+		if err := routerHandler.Handle(routerCtx); err != nil {
+			t.Fatalf("router handle: %v", err)
+		}
+
+		assertErrorParity(t, rec, routerCtx.recorder)
+	})
 }
 
 func TestRouterBufferedFallback(t *testing.T) {

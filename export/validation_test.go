@@ -35,6 +35,30 @@ func TestResolveExport_DisallowedColumn(t *testing.T) {
 	}
 }
 
+func TestResolveExport_SelectionQueryRequiresName(t *testing.T) {
+	def := ResolvedDefinition{
+		ExportDefinition: ExportDefinition{
+			Name:           "users",
+			AllowedFormats: []Format{FormatCSV},
+			Schema: Schema{Columns: []Column{
+				{Name: "id"},
+			}},
+		},
+	}
+
+	_, err := ResolveExport(ExportRequest{
+		Definition: "users",
+		Format:     FormatCSV,
+		Selection:  Selection{Mode: SelectionQuery},
+	}, def, testNow())
+	if err == nil {
+		t.Fatalf("expected validation error")
+	}
+	if exportErr, ok := err.(*ExportError); !ok || exportErr.Kind != KindValidation {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
 func TestRunner_RedactsColumns(t *testing.T) {
 	buf := &bytes.Buffer{}
 	iter := &stubIterator{rows: []Row{{"1", "secret"}}}
