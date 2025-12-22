@@ -28,6 +28,10 @@ func ResolveExport(req ExportRequest, def ResolvedDefinition, now time.Time) (Re
 		return ResolvedExport{}, NewError(KindValidation, "definition is required", nil)
 	}
 
+	if err := validateSelection(req.Selection); err != nil {
+		return ResolvedExport{}, err
+	}
+
 	columns, columnNames, redactions, err := resolveColumns(def.Schema.Columns, req.Columns, def.Policy)
 	if err != nil {
 		return ResolvedExport{}, err
@@ -48,6 +52,23 @@ func ResolveExport(req ExportRequest, def ResolvedDefinition, now time.Time) (Re
 		return ResolvedExport{}, NewError(KindValidation, "invalid filename template", err)
 	}
 
+	if isTemplateFormat(req.Format) {
+		req.RenderOptions.Template = mergeTemplateOptions(def.Template, req.RenderOptions.Template)
+		if req.RenderOptions.Template.Definition == "" {
+			req.RenderOptions.Template.Definition = def.Name
+		}
+		if req.RenderOptions.Template.Title == "" {
+			if req.RenderOptions.Template.Definition != "" {
+				req.RenderOptions.Template.Title = req.RenderOptions.Template.Definition
+			} else {
+				req.RenderOptions.Template.Title = def.Name
+			}
+		}
+		if req.RenderOptions.Template.GeneratedAt.IsZero() {
+			req.RenderOptions.Template.GeneratedAt = now
+		}
+	}
+
 	return ResolvedExport{
 		Request:       req,
 		Definition:    def,
@@ -64,9 +85,6 @@ func normalizeRequest(req ExportRequest) ExportRequest {
 	}
 	if req.Delivery == "" {
 		req.Delivery = DeliveryAuto
-	}
-	if req.Selection.Mode == "" {
-		req.Selection.Mode = SelectionAll
 	}
 	if req.RenderOptions.CSV.Delimiter == 0 {
 		req.RenderOptions.CSV.Delimiter = ','
@@ -90,6 +108,24 @@ func normalizeRequest(req ExportRequest) ExportRequest {
 		req.RenderOptions.Format.Timezone = req.Timezone
 	}
 	return req
+}
+
+func validateSelection(selection Selection) error {
+	if selection.Mode == "" {
+		if len(selection.IDs) > 0 || strings.TrimSpace(selection.Query.Name) != "" {
+			return NewError(KindValidation, "selection mode is required when ids or query are provided", nil)
+		}
+		return nil
+	}
+	switch selection.Mode {
+	case SelectionAll, SelectionIDs, SelectionQuery:
+	default:
+		return NewError(KindValidation, fmt.Sprintf("selection mode %q not supported", selection.Mode), nil)
+	}
+	if selection.Mode == SelectionQuery && strings.TrimSpace(selection.Query.Name) == "" {
+		return NewError(KindValidation, "selection query name is required", nil)
+	}
+	return nil
 }
 
 func formatAllowed(format Format, allowed []Format) bool {
@@ -156,26 +192,53 @@ func resolveColumns(schema []Column, requested []string, policy ExportPolicy) ([
 		columnNames = append(columnNames, col.Name)
 	}
 
-	redactions := make(map[int]any)
-	if len(policy.RedactColumns) > 0 {
-		redactionValue := policy.RedactionValue
-		if redactionValue == nil {
-			redactionValue = "[redacted]"
-		}
-		for idx, col := range columns {
-			for _, name := range policy.RedactColumns {
-				if name == col.Name {
-					redactions[idx] = redactionValue
-				}
-			}
-		}
-	}
+	redactions := resolveRedactions(columns, policy)
 
 	if len(columns) == 0 {
 		return nil, nil, nil, NewError(KindValidation, "no columns selected", nil)
 	}
 
 	return columns, columnNames, redactions, nil
+}
+
+func resolveRedactions(columns []Column, policy ExportPolicy) map[int]any {
+	if len(policy.RedactColumns) == 0 {
+		return nil
+	}
+	redactionValue := policy.RedactionValue
+	if redactionValue == nil {
+		redactionValue = "[redacted]"
+	}
+	redactions := make(map[int]any)
+	for idx, col := range columns {
+		for _, name := range policy.RedactColumns {
+			if name == col.Name {
+				redactions[idx] = redactionValue
+			}
+		}
+	}
+	if len(redactions) == 0 {
+		return nil
+	}
+	return redactions
+}
+
+func validateSchema(schema Schema) error {
+	if len(schema.Columns) == 0 {
+		return NewError(KindValidation, "schema has no columns", nil)
+	}
+	seen := make(map[string]struct{}, len(schema.Columns))
+	for _, col := range schema.Columns {
+		name := strings.TrimSpace(col.Name)
+		if name == "" {
+			return NewError(KindValidation, "column name is required", nil)
+		}
+		if _, ok := seen[name]; ok {
+			return NewError(KindValidation, fmt.Sprintf("duplicate column %q", name), nil)
+		}
+		seen[name] = struct{}{}
+	}
+	return nil
 }
 
 func mergePolicy(base ExportPolicy, override ExportPolicy) ExportPolicy {
