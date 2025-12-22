@@ -15,6 +15,7 @@ const (
 	FormatNDJSON   Format = "ndjson"
 	FormatXLSX     Format = "xlsx"
 	FormatTemplate Format = "template"
+	FormatPDF      Format = "pdf"
 )
 
 // DeliveryMode describes how exports are delivered.
@@ -30,14 +31,37 @@ const (
 type SelectionMode string
 
 const (
-	SelectionAll SelectionMode = "all"
-	SelectionIDs SelectionMode = "ids"
+	SelectionAll   SelectionMode = "all"
+	SelectionIDs   SelectionMode = "ids"
+	SelectionQuery SelectionMode = "query"
 )
+
+// SelectionQueryRef references a named selection query plus optional params.
+type SelectionQueryRef struct {
+	Name   string
+	Params any
+}
 
 // Selection captures row selection intent.
 type Selection struct {
-	Mode SelectionMode
-	IDs  []string
+	Mode  SelectionMode
+	IDs   []string
+	Query SelectionQueryRef
+}
+
+// SelectionPolicy supplies default selections for requests without one.
+type SelectionPolicy interface {
+	DefaultSelection(ctx context.Context, actor Actor, req ExportRequest, def ResolvedDefinition) (Selection, bool, error)
+}
+
+// SelectionPolicyFunc adapts a function to a SelectionPolicy.
+type SelectionPolicyFunc func(ctx context.Context, actor Actor, req ExportRequest, def ResolvedDefinition) (Selection, bool, error)
+
+func (f SelectionPolicyFunc) DefaultSelection(ctx context.Context, actor Actor, req ExportRequest, def ResolvedDefinition) (Selection, bool, error) {
+	if f == nil {
+		return Selection{}, false, nil
+	}
+	return f(ctx, actor, req, def)
 }
 
 // ExportRequest captures an export request.
@@ -61,15 +85,19 @@ type ExportRequest struct {
 
 // ExportDefinition declares an exportable dataset.
 type ExportDefinition struct {
-	Name            string
-	Resource        string
-	Schema          Schema
-	AllowedFormats  []Format
-	DefaultFilename string
-	RowSourceKey    string
-	SourceVariants  map[string]SourceVariant
-	Policy          ExportPolicy
-	DeliveryPolicy  *DeliveryPolicy
+	Name             string
+	Resource         string
+	Schema           Schema
+	AllowedFormats   []Format
+	DefaultFilename  string
+	RowSourceKey     string
+	Transformers     []TransformerConfig
+	DefaultSelection Selection
+	SelectionPolicy  SelectionPolicy
+	SourceVariants   map[string]SourceVariant
+	Policy           ExportPolicy
+	DeliveryPolicy   *DeliveryPolicy
+	Template         TemplateOptions
 }
 
 // SourceVariant allows alternate sources and policy overrides.
@@ -77,7 +105,9 @@ type SourceVariant struct {
 	RowSourceKey    string
 	AllowedFormats  []Format
 	DefaultFilename string
+	Transformers    []TransformerConfig
 	Policy          *ExportPolicy
+	Template        *TemplateOptions
 }
 
 // ExportPolicy enforces export limits and redaction.
@@ -151,6 +181,7 @@ type ExportRecord struct {
 	State        ExportState
 	RequestedBy  Actor
 	Scope        Scope
+	Request      ExportRequest `json:"-"`
 	Counts       ExportCounts
 	BytesWritten int64
 	Artifact     ArtifactRef
@@ -207,6 +238,16 @@ type RowIterator interface {
 	Close() error
 }
 
+// RowTransformer wraps an iterator with row-level transformations.
+type RowTransformer interface {
+	Wrap(ctx context.Context, in RowIterator, schema Schema) (RowIterator, Schema, error)
+}
+
+// BufferedTransformer collects rows to perform non-streaming transforms.
+type BufferedTransformer interface {
+	Process(ctx context.Context, rows RowIterator, schema Schema) ([]Row, Schema, error)
+}
+
 // Renderer writes rows to the destination.
 type Renderer interface {
 	Render(ctx context.Context, schema Schema, rows RowIterator, w io.Writer, opts RenderOptions) (RenderStats, error)
@@ -239,6 +280,30 @@ type JSONOptions struct {
 	Mode JSONMode
 }
 
+// TemplateStrategy selects template rendering behavior.
+type TemplateStrategy string
+
+const (
+	TemplateStrategyBuffered  TemplateStrategy = "buffered"
+	TemplateStrategyStreaming TemplateStrategy = "streaming"
+)
+
+// TemplateOptions configures template rendering.
+type TemplateOptions struct {
+	Strategy     TemplateStrategy
+	MaxRows      int
+	TemplateName string
+	Layout       string
+	Title        string
+	Definition   string
+	GeneratedAt  time.Time
+	ChartConfig  any
+	Theme        map[string]any
+	Header       map[string]any
+	Footer       map[string]any
+	Data         map[string]any
+}
+
 // XLSXOptions configures XLSX output.
 type XLSXOptions struct {
 	IncludeHeaders bool
@@ -246,6 +311,30 @@ type XLSXOptions struct {
 	SheetName      string
 	MaxRows        int
 	MaxBytes       int64
+}
+
+// PDFExternalAssetsPolicy controls how external assets are handled in PDF rendering.
+type PDFExternalAssetsPolicy string
+
+const (
+	PDFExternalAssetsUnspecified PDFExternalAssetsPolicy = ""
+	PDFExternalAssetsAllow       PDFExternalAssetsPolicy = "allow"
+	PDFExternalAssetsBlock       PDFExternalAssetsPolicy = "block"
+)
+
+// PDFOptions configures PDF output for headless engines.
+type PDFOptions struct {
+	PageSize             string
+	Landscape            *bool
+	PrintBackground      *bool
+	Scale                float64
+	MarginTop            string
+	MarginBottom         string
+	MarginLeft           string
+	MarginRight          string
+	PreferCSSPageSize    *bool
+	BaseURL              string
+	ExternalAssetsPolicy PDFExternalAssetsPolicy
 }
 
 // FormatOptions configures locale/timezone formatting.
@@ -256,10 +345,12 @@ type FormatOptions struct {
 
 // RenderOptions configures renderer behavior.
 type RenderOptions struct {
-	CSV    CSVOptions
-	JSON   JSONOptions
-	XLSX   XLSXOptions
-	Format FormatOptions
+	CSV      CSVOptions
+	JSON     JSONOptions
+	Template TemplateOptions
+	XLSX     XLSXOptions
+	PDF      PDFOptions
+	Format   FormatOptions
 }
 
 // ArtifactMeta captures stored artifact metadata.
