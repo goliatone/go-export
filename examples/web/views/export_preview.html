@@ -461,7 +461,7 @@
     {% if chart_config %}
     const chartDom = document.getElementById('chart');
     const chart = echarts.init(chartDom);
-    const chartConfig = {{ chart_config | to_json }};
+    const chartConfig = {{ to_json(chart_config) }};
 
     chart.setOption({
       title: { text: chartConfig.title || '' },
@@ -569,7 +569,7 @@
           page += 1;
         }
 
-        const definition = {{ definition | to_json }};
+        const definition = {{ to_json(definition) }};
         const filename = (definition || 'export') + '-export.pdf';
         pdf.save(filename);
       } catch (error) {

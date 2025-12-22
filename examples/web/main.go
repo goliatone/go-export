@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/gofiber/fiber/v2"
@@ -31,6 +33,84 @@ func main() {
 	}
 	if artifactDir := os.Getenv("ARTIFACT_DIR"); artifactDir != "" {
 		cfg.Export.ArtifactDir = artifactDir
+	}
+
+	// Template config overrides
+	if templateEnabled := os.Getenv("EXPORT_TEMPLATE_ENABLED"); templateEnabled == "true" {
+		cfg.Export.Template.Enabled = true
+	} else if templateEnabled == "false" {
+		cfg.Export.Template.Enabled = false
+	}
+	if templateDir := os.Getenv("EXPORT_TEMPLATE_DIR"); templateDir != "" {
+		cfg.Export.Template.TemplateDir = templateDir
+	}
+	if templateName := os.Getenv("EXPORT_TEMPLATE_NAME"); templateName != "" {
+		cfg.Export.Template.TemplateName = templateName
+	}
+
+	// PDF config overrides
+	if pdfEnabled := os.Getenv("EXPORT_PDF_ENABLED"); pdfEnabled == "true" {
+		cfg.Export.PDF.Enabled = true
+	} else if pdfEnabled == "false" {
+		cfg.Export.PDF.Enabled = false
+	}
+	if pdfEngine := os.Getenv("EXPORT_PDF_ENGINE"); pdfEngine != "" {
+		cfg.Export.PDF.Engine = pdfEngine
+	}
+	if wkhtmlPath := os.Getenv("EXPORT_WKHTMLTOPDF_PATH"); wkhtmlPath != "" {
+		cfg.Export.PDF.WKHTMLTOPDFPath = wkhtmlPath
+	}
+	if chromiumPath := os.Getenv("EXPORT_PDF_CHROMIUM_PATH"); chromiumPath != "" {
+		cfg.Export.PDF.ChromiumPath = chromiumPath
+	}
+	if headless := os.Getenv("EXPORT_PDF_HEADLESS"); headless != "" {
+		if parsed, err := strconv.ParseBool(headless); err == nil {
+			cfg.Export.PDF.Headless = parsed
+		}
+	}
+	if args := os.Getenv("EXPORT_PDF_CHROMIUM_ARGS"); args != "" {
+		cfg.Export.PDF.Args = splitCSV(args)
+	}
+	if pdfTimeout := os.Getenv("EXPORT_PDF_TIMEOUT"); pdfTimeout != "" {
+		if t, err := strconv.Atoi(pdfTimeout); err == nil && t > 0 {
+			cfg.Export.PDF.Timeout = t
+		}
+	}
+	if pageSize := os.Getenv("EXPORT_PDF_PAGE_SIZE"); pageSize != "" {
+		cfg.Export.PDF.PageSize = pageSize
+	}
+	if printBg := os.Getenv("EXPORT_PDF_PRINT_BACKGROUND"); printBg != "" {
+		if parsed, err := strconv.ParseBool(printBg); err == nil {
+			cfg.Export.PDF.PrintBackground = parsed
+		}
+	}
+	if preferCSS := os.Getenv("EXPORT_PDF_PREFER_CSS_PAGE_SIZE"); preferCSS != "" {
+		if parsed, err := strconv.ParseBool(preferCSS); err == nil {
+			cfg.Export.PDF.PreferCSSPageSize = parsed
+		}
+	}
+	if scale := os.Getenv("EXPORT_PDF_SCALE"); scale != "" {
+		if parsed, err := strconv.ParseFloat(scale, 64); err == nil {
+			cfg.Export.PDF.Scale = parsed
+		}
+	}
+	if marginTop := os.Getenv("EXPORT_PDF_MARGIN_TOP"); marginTop != "" {
+		cfg.Export.PDF.MarginTop = marginTop
+	}
+	if marginBottom := os.Getenv("EXPORT_PDF_MARGIN_BOTTOM"); marginBottom != "" {
+		cfg.Export.PDF.MarginBottom = marginBottom
+	}
+	if marginLeft := os.Getenv("EXPORT_PDF_MARGIN_LEFT"); marginLeft != "" {
+		cfg.Export.PDF.MarginLeft = marginLeft
+	}
+	if marginRight := os.Getenv("EXPORT_PDF_MARGIN_RIGHT"); marginRight != "" {
+		cfg.Export.PDF.MarginRight = marginRight
+	}
+	if baseURL := os.Getenv("EXPORT_PDF_BASE_URL"); baseURL != "" {
+		cfg.Export.PDF.BaseURL = baseURL
+	}
+	if policy := os.Getenv("EXPORT_PDF_EXTERNAL_ASSETS_POLICY"); policy != "" {
+		cfg.Export.PDF.ExternalAssetsPolicy = policy
 	}
 
 	// Create application
@@ -69,6 +149,19 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown error: %v", err)
 	}
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
 }
 
 func buildServer(app *App) (router.Server[*fiber.App], error) {

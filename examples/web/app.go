@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/flosch/pongo2/v6"
 	"github.com/goliatone/go-command/dispatcher"
-	"github.com/goliatone/go-export/adapters/job"
+	exportjob "github.com/goliatone/go-export/adapters/job"
+	exportpdf "github.com/goliatone/go-export/adapters/pdf"
+	exporttemplate "github.com/goliatone/go-export/adapters/template"
 	"github.com/goliatone/go-export/examples"
 	"github.com/goliatone/go-export/examples/web/config"
 	"github.com/goliatone/go-export/export"
@@ -67,6 +72,11 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 	runner.Store = store
 	runner.Logger = logger
 	runner.Guard = &NoOpGuard{}
+
+	// Initialize template and PDF renderers
+	if err := registerTemplateRenderers(runner, cfg, logger); err != nil {
+		return nil, fmt.Errorf("failed to register template renderers: %w", err)
+	}
 
 	// Create service with delivery policy
 	deliveryPolicy := export.DeliveryPolicy{
@@ -303,12 +313,39 @@ func registerDemoSources(registry *export.RowSourceRegistry) {
 
 // registerDemoDefinitions adds demo export definitions to the registry.
 func registerDemoDefinitions(registry *export.DefinitionRegistry) {
+	// All formats including template and PDF
+	allFormats := []export.Format{
+		export.FormatCSV,
+		export.FormatJSON,
+		export.FormatNDJSON,
+		export.FormatXLSX,
+		export.FormatTemplate,
+		export.FormatPDF,
+	}
+
+	// Default template options for exports
+	defaultTemplate := export.TemplateOptions{
+		TemplateName: "export",
+		Layout:       "default",
+		Data: map[string]any{
+			"pdf_assets_host": export.DefaultPDFAssetsHost(),
+		},
+	}
+
 	registry.Register(export.ExportDefinition{
 		Name:            "users",
 		Resource:        "users",
-		AllowedFormats:  []export.Format{export.FormatCSV, export.FormatJSON, export.FormatNDJSON, export.FormatXLSX},
+		AllowedFormats:  allFormats,
 		DefaultFilename: "users-export",
 		RowSourceKey:    "users",
+		Template: export.TemplateOptions{
+			TemplateName: "export",
+			Layout:       "default",
+			Title:        "Users Export",
+			Data: map[string]any{
+				"pdf_assets_host": export.DefaultPDFAssetsHost(),
+			},
+		},
 		Schema: export.Schema{
 			Columns: []export.Column{
 				{Name: "id", Label: "ID", Type: "string"},
@@ -323,9 +360,17 @@ func registerDemoDefinitions(registry *export.DefinitionRegistry) {
 	registry.Register(export.ExportDefinition{
 		Name:            "products",
 		Resource:        "products",
-		AllowedFormats:  []export.Format{export.FormatCSV, export.FormatJSON, export.FormatNDJSON, export.FormatXLSX},
+		AllowedFormats:  allFormats,
 		DefaultFilename: "products-export",
 		RowSourceKey:    "products",
+		Template: export.TemplateOptions{
+			TemplateName: "export",
+			Layout:       "default",
+			Title:        "Products Export",
+			Data: map[string]any{
+				"pdf_assets_host": export.DefaultPDFAssetsHost(),
+			},
+		},
 		Schema: export.Schema{
 			Columns: []export.Column{
 				{Name: "id", Label: "ID", Type: "string"},
@@ -340,9 +385,10 @@ func registerDemoDefinitions(registry *export.DefinitionRegistry) {
 	registry.Register(export.ExportDefinition{
 		Name:            "orders",
 		Resource:        "orders",
-		AllowedFormats:  []export.Format{export.FormatCSV, export.FormatJSON, export.FormatNDJSON, export.FormatXLSX},
+		AllowedFormats:  allFormats,
 		DefaultFilename: "orders-export",
 		RowSourceKey:    "orders",
+		Template:        defaultTemplate,
 		Schema: export.Schema{
 			Columns: []export.Column{
 				{Name: "id", Label: "Order ID", Type: "string"},
@@ -353,4 +399,174 @@ func registerDemoDefinitions(registry *export.DefinitionRegistry) {
 			},
 		},
 	})
+}
+
+// registerTemplateRenderers initializes and registers template and PDF renderers.
+func registerTemplateRenderers(runner *export.Runner, cfg config.Config, logger *SimpleLogger) error {
+	if runner.Renderers == nil {
+		runner.Renderers = export.NewRendererRegistry()
+	}
+
+	// Register default renderers if not already present
+	runner.Renderers.Register(export.FormatCSV, export.CSVRenderer{})
+	runner.Renderers.Register(export.FormatJSON, export.JSONRenderer{})
+	runner.Renderers.Register(export.FormatNDJSON, export.JSONRenderer{})
+	runner.Renderers.Register(export.FormatXLSX, export.XLSXRenderer{})
+
+	// Initialize template renderer if enabled
+	if cfg.Export.Template.Enabled {
+		templateDir := cfg.Export.Template.TemplateDir
+		if templateDir == "" {
+			templateDir = "./templates/export"
+		}
+
+		// Create template directory if it doesn't exist
+		if err := os.MkdirAll(templateDir, 0755); err != nil {
+			return fmt.Errorf("failed to create template directory: %w", err)
+		}
+
+		// Initialize pongo2 template set with custom loader
+		loader, err := pongo2.NewLocalFileSystemLoader(templateDir)
+		if err != nil {
+			return fmt.Errorf("failed to create template loader: %w", err)
+		}
+		templateSet := pongo2.NewSet("export", loader)
+
+		// Register to_json filter
+		if err := pongo2.RegisterFilter("to_json", toJSONFilter); err != nil {
+			// Filter may already exist, ignore error
+			logger.Debugf("to_json filter registration: %v", err)
+		}
+
+		executor := &Pongo2Executor{
+			TemplateSet: templateSet,
+			Extension:   ".html",
+		}
+
+		templateRenderer := exporttemplate.Renderer{
+			Enabled:      true,
+			Templates:    executor,
+			TemplateName: cfg.Export.Template.TemplateName,
+			Strategy:     exporttemplate.BufferedStrategy{MaxRows: cfg.Export.Template.MaxRows},
+		}
+
+		runner.Renderers.Register(export.FormatTemplate, templateRenderer)
+		logger.Infof("Template renderer enabled (dir: %s, template: %s)", templateDir, cfg.Export.Template.TemplateName)
+
+		// Initialize PDF renderer if enabled (requires template renderer)
+		if cfg.Export.PDF.Enabled {
+			engineName := strings.ToLower(strings.TrimSpace(cfg.Export.PDF.Engine))
+			var pdfEngine exportpdf.Engine
+			engineLabel := engineName
+
+			switch engineName {
+			case "", "chromium", "chromedp":
+				pdfEngine = &exportpdf.ChromiumEngine{
+					BrowserPath: cfg.Export.PDF.ChromiumPath,
+					Headless:    cfg.Export.PDF.Headless,
+					Timeout:     time.Duration(cfg.Export.PDF.Timeout) * time.Second,
+					Args:        cfg.Export.PDF.Args,
+					DefaultPDF: export.PDFOptions{
+						PageSize:             cfg.Export.PDF.PageSize,
+						PrintBackground:      boolPtr(cfg.Export.PDF.PrintBackground),
+						PreferCSSPageSize:    boolPtr(cfg.Export.PDF.PreferCSSPageSize),
+						Scale:                cfg.Export.PDF.Scale,
+						MarginTop:            cfg.Export.PDF.MarginTop,
+						MarginBottom:         cfg.Export.PDF.MarginBottom,
+						MarginLeft:           cfg.Export.PDF.MarginLeft,
+						MarginRight:          cfg.Export.PDF.MarginRight,
+						BaseURL:              cfg.Export.PDF.BaseURL,
+						ExternalAssetsPolicy: export.PDFExternalAssetsPolicy(cfg.Export.PDF.ExternalAssetsPolicy),
+					},
+				}
+				engineLabel = "chromium"
+			case "wkhtmltopdf":
+				pdfEngine = exportpdf.WKHTMLTOPDFEngine{
+					Command: cfg.Export.PDF.WKHTMLTOPDFPath,
+					Timeout: time.Duration(cfg.Export.PDF.Timeout) * time.Second,
+				}
+				engineLabel = "wkhtmltopdf"
+			default:
+				return fmt.Errorf("unsupported pdf engine: %s", cfg.Export.PDF.Engine)
+			}
+
+			pdfRenderer := exportpdf.Renderer{
+				Enabled:      true,
+				HTMLRenderer: templateRenderer,
+				Engine:       pdfEngine,
+			}
+
+			runner.Renderers.Register(export.FormatPDF, pdfRenderer)
+			logger.Infof("PDF renderer enabled (engine: %s)", engineLabel)
+		}
+	}
+
+	return nil
+}
+
+// Pongo2Executor adapts pongo2 to the TemplateExecutor interface.
+type Pongo2Executor struct {
+	TemplateSet *pongo2.TemplateSet
+	Extension   string
+}
+
+// ExecuteTemplate renders a named template with the given data.
+func (e *Pongo2Executor) ExecuteTemplate(w io.Writer, name string, data any) error {
+	templateName := name
+	if e.Extension != "" && filepath.Ext(name) == "" {
+		templateName = name + e.Extension
+	}
+
+	tpl, err := e.TemplateSet.FromFile(templateName)
+	if err != nil {
+		return fmt.Errorf("failed to load template %q: %w", templateName, err)
+	}
+
+	ctx, err := toPongo2Context(data)
+	if err != nil {
+		return fmt.Errorf("failed to convert data to pongo2 context: %w", err)
+	}
+
+	return tpl.ExecuteWriter(ctx, w)
+}
+
+// toPongo2Context converts arbitrary data to a pongo2.Context.
+func toPongo2Context(data any) (pongo2.Context, error) {
+	if data == nil {
+		return pongo2.Context{}, nil
+	}
+
+	// If it's already a map, use it directly
+	if m, ok := data.(map[string]any); ok {
+		return pongo2.Context(m), nil
+	}
+
+	// Convert struct to map via JSON round-trip
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(jsonBytes, &result); err != nil {
+		return nil, err
+	}
+
+	return pongo2.Context(result), nil
+}
+
+func boolPtr(value bool) *bool {
+	return &value
+}
+
+// toJSONFilter is a pongo2 filter that converts data to JSON string.
+func toJSONFilter(in *pongo2.Value, param *pongo2.Value) (*pongo2.Value, *pongo2.Error) {
+	jsonBytes, err := json.Marshal(in.Interface())
+	if err != nil {
+		return nil, &pongo2.Error{
+			Sender:    "filter:to_json",
+			OrigError: err,
+		}
+	}
+	return pongo2.AsValue(string(jsonBytes)), nil
 }

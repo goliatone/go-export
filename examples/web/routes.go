@@ -20,11 +20,12 @@ func (a *App) SetupRoutes(r router.Router[*fiber.App]) {
 
 	// Export API endpoints
 	exportHandler := exportrouter.NewHandler(exportrouter.Config{
-		Service:       a.Service,
-		Runner:        a.Runner,
-		Store:         a.Store,
-		ActorProvider: staticActorProvider{actor: a.getActor()},
-		Logger:        a.Logger,
+		Service:        a.Service,
+		Runner:         a.Runner,
+		Store:          a.Store,
+		ActorProvider:  staticActorProvider{actor: a.getActor()},
+		Logger:         a.Logger,
+		AsyncRequester: a.Scheduler,
 	})
 	exportHandler.RegisterRoutes(r)
 

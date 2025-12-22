@@ -20,6 +20,37 @@ type ExportConfig struct {
 	DefaultFormat  string
 	EnableAsync    bool
 	CleanupOnStart bool
+	Template       TemplateConfig
+	PDF            PDFConfig
+}
+
+// TemplateConfig holds template renderer settings.
+type TemplateConfig struct {
+	Enabled      bool
+	TemplateDir  string
+	TemplateName string
+	MaxRows      int
+}
+
+// PDFConfig holds PDF renderer settings.
+type PDFConfig struct {
+	Enabled              bool
+	Engine               string
+	WKHTMLTOPDFPath      string
+	ChromiumPath         string
+	Headless             bool
+	Args                 []string
+	Timeout              int // seconds
+	PageSize             string
+	PrintBackground      bool
+	PreferCSSPageSize    bool
+	Scale                float64
+	MarginTop            string
+	MarginBottom         string
+	MarginLeft           string
+	MarginRight          string
+	BaseURL              string
+	ExternalAssetsPolicy string
 }
 
 // FeatureFlags toggles optional features.
@@ -40,6 +71,31 @@ func Defaults() Config {
 			DefaultFormat:  "csv",
 			EnableAsync:    true,
 			CleanupOnStart: true,
+			Template: TemplateConfig{
+				Enabled:      true,
+				TemplateDir:  "./templates/export",
+				TemplateName: "export",
+				MaxRows:      10000,
+			},
+			PDF: PDFConfig{
+				Enabled:              false, // disabled by default; requires Chromium or wkhtmltopdf
+				Engine:               "chromium",
+				WKHTMLTOPDFPath:      "wkhtmltopdf",
+				ChromiumPath:         "",
+				Headless:             true,
+				Args:                 []string{"--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"},
+				Timeout:              60,
+				PageSize:             "",
+				PrintBackground:      true,
+				PreferCSSPageSize:    true,
+				Scale:                1.0,
+				MarginTop:            "",
+				MarginBottom:         "",
+				MarginLeft:           "",
+				MarginRight:          "",
+				BaseURL:              "",
+				ExternalAssetsPolicy: "",
+			},
 		},
 		Features: FeatureFlags{
 			EnableAuth: false,
