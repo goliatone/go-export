@@ -100,7 +100,7 @@ func buildIdempotencyKey(key string, actor export.Actor, req export.ExportReques
 		Variant:      req.SourceVariant,
 		Format:       req.Format,
 		Columns:      req.Columns,
-		Selection:    export.Selection{Mode: req.Selection.Mode, IDs: ids},
+		Selection:    export.Selection{Mode: req.Selection.Mode, IDs: ids, Query: req.Selection.Query},
 		QueryPayload: marshalQuery(req.Query),
 	}
 
