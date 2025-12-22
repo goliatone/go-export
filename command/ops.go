@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"time"
 
 	gcmd "github.com/goliatone/go-command"
 	"github.com/goliatone/go-errors"
@@ -31,10 +32,18 @@ type BatchCommand struct {
 	loader     BatchLoader
 	cliConfig  gcmd.CLIConfig
 	cronConfig gcmd.HandlerConfig
+	limits     BatchLimits
+	sleep      func(time.Duration)
 }
 
 // BatchOption customizes batch commands.
 type BatchOption func(*BatchCommand)
+
+// BatchLimits bounds batch execution throughput.
+type BatchLimits struct {
+	MaxRequests int
+	MinInterval time.Duration
+}
 
 // WithBatchCLIConfig overrides CLI configuration.
 func WithBatchCLIConfig(cfg gcmd.CLIConfig) BatchOption {
@@ -50,6 +59,13 @@ func WithBatchCronConfig(cfg gcmd.HandlerConfig) BatchOption {
 	}
 }
 
+// WithBatchLimits overrides batch execution limits.
+func WithBatchLimits(limits BatchLimits) BatchOption {
+	return func(cmd *BatchCommand) {
+		cmd.limits = limits
+	}
+}
+
 // NewBackfillCommand creates a backfill CLI/Cron command.
 func NewBackfillCommand(requester BatchRequester, loader BatchLoader, opts ...BatchOption) *BatchCommand {
 	cmd := &BatchCommand{
@@ -61,6 +77,7 @@ func NewBackfillCommand(requester BatchRequester, loader BatchLoader, opts ...Ba
 			Group:       "exports",
 		},
 		cronConfig: gcmd.HandlerConfig{Expression: "0 0 * * *"},
+		sleep:      time.Sleep,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -81,6 +98,7 @@ func NewScheduledExportsCommand(requester BatchRequester, loader BatchLoader, op
 			Group:       "exports",
 		},
 		cronConfig: gcmd.HandlerConfig{Expression: "0 * * * *"},
+		sleep:      time.Sleep,
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -136,6 +154,9 @@ func (c *BatchCommand) run(ctx context.Context, from string) (int, error) {
 
 	count := 0
 	for _, item := range requests {
+		if c.limits.MaxRequests > 0 && count >= c.limits.MaxRequests {
+			break
+		}
 		req := item.Request
 		req.Delivery = export.DeliveryAsync
 		req.Output = nil
@@ -143,6 +164,9 @@ func (c *BatchCommand) run(ctx context.Context, from string) (int, error) {
 			return count, err
 		}
 		count++
+		if c.limits.MinInterval > 0 && c.sleep != nil {
+			c.sleep(c.limits.MinInterval)
+		}
 	}
 	return count, nil
 }
@@ -185,6 +209,52 @@ func loadBatchRequestsFromFile(path string) ([]BatchRequest, error) {
 			WithTextCode("BATCH_FILE_INVALID")
 	}
 	return requests, nil
+}
+
+// DefinitionBatch builds PDF batch requests for a definition list.
+type DefinitionBatch struct {
+	Actor       export.Actor
+	Definitions []string
+	Request     export.ExportRequest
+}
+
+// BuildPDFBatchRequests returns async PDF export requests for each definition.
+func BuildPDFBatchRequests(batch DefinitionBatch) []BatchRequest {
+	if len(batch.Definitions) == 0 {
+		return nil
+	}
+	req := batch.Request
+	if req.Format == "" {
+		req.Format = export.FormatPDF
+	}
+
+	requests := make([]BatchRequest, 0, len(batch.Definitions))
+	for _, definition := range batch.Definitions {
+		if strings.TrimSpace(definition) == "" {
+			continue
+		}
+		item := BatchRequest{
+			Actor: batch.Actor,
+			Request: export.ExportRequest{
+				Definition:        definition,
+				SourceVariant:     req.SourceVariant,
+				Format:            req.Format,
+				Query:             req.Query,
+				Selection:         req.Selection,
+				Columns:           req.Columns,
+				Locale:            req.Locale,
+				Timezone:          req.Timezone,
+				Delivery:          req.Delivery,
+				IdempotencyKey:    req.IdempotencyKey,
+				EstimatedRows:     req.EstimatedRows,
+				EstimatedBytes:    req.EstimatedBytes,
+				EstimatedDuration: req.EstimatedDuration,
+				RenderOptions:     req.RenderOptions,
+			},
+		}
+		requests = append(requests, item)
+	}
+	return requests
 }
 
 // CLIHandler exposes cleanup via CLI.
