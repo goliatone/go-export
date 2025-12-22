@@ -48,6 +48,12 @@ func renderFilename(def ResolvedDefinition, req ExportRequest, now time.Time) (s
 	}
 
 	ext := string(req.Format)
+	switch req.Format {
+	case FormatTemplate:
+		ext = "html"
+	case FormatPDF:
+		ext = "pdf"
+	}
 	if !strings.HasSuffix(strings.ToLower(result), "."+ext) {
 		result = result + "." + ext
 	}
