@@ -14,6 +14,7 @@ type Runner struct {
 	Definitions    *DefinitionRegistry
 	RowSources     *RowSourceRegistry
 	Renderers      *RendererRegistry
+	Transformers   *TransformerRegistry
 	Tracker        ProgressTracker
 	Store          ArtifactStore
 	Guard          Guard
@@ -37,12 +38,13 @@ func NewRunner() *Runner {
 	_ = renderers.Register(FormatXLSX, XLSXRenderer{})
 
 	return &Runner{
-		Definitions: NewDefinitionRegistry(),
-		RowSources:  NewRowSourceRegistry(),
-		Renderers:   renderers,
-		Logger:      NopLogger{},
-		Now:         time.Now,
-		IDGenerator: defaultIDGenerator(),
+		Definitions:  NewDefinitionRegistry(),
+		RowSources:   NewRowSourceRegistry(),
+		Renderers:    renderers,
+		Transformers: NewTransformerRegistry(),
+		Logger:       NopLogger{},
+		Now:          time.Now,
+		IDGenerator:  defaultIDGenerator(),
 	}
 }
 
@@ -97,6 +99,13 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 		}
 	}
 
+	runReq := resolved.Request
+	runReq, _, err = applySelectionDefaults(ctx, actor, runReq, resolved.Definition)
+	if err != nil {
+		return ExportResult{}, AsGoError(err)
+	}
+	resolved.Request = runReq
+
 	if r.QuotaHook != nil {
 		if err := r.QuotaHook.Allow(ctx, actor, resolved.Request, resolved.Definition); err != nil {
 			return ExportResult{}, AsGoError(err)
@@ -108,7 +117,6 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 		defer cancel()
 	}
 
-	runReq := resolved.Request
 	if resolved.Definition.Policy.MaxBytes > 0 {
 		runReq.Output = newLimitedWriter(runReq.Output, resolved.Definition.Policy.MaxBytes)
 	}
@@ -162,9 +170,25 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 		r.fail(ctx, runInfo, err)
 		return ExportResult{}, AsGoError(err)
 	}
-	defer iterator.Close()
 
-	tracked := newTrackingIterator(iterator, resolved, r.Tracker, exportID)
+	rows := iterator
+	schema := Schema{Columns: resolved.Columns}
+	transformers, err := r.resolveTransformers(resolved.Definition)
+	if err != nil {
+		_ = iterator.Close()
+		r.fail(ctx, runInfo, err)
+		return ExportResult{}, AsGoError(err)
+	}
+	rows, schema, err = applyTransformers(ctx, rows, schema, transformers)
+	if err != nil {
+		_ = iterator.Close()
+		r.fail(ctx, runInfo, err)
+		return ExportResult{}, AsGoError(err)
+	}
+	defer rows.Close()
+
+	redactions := resolveRedactions(schema.Columns, resolved.Definition.Policy)
+	tracked := newTrackingIterator(rows, r.Tracker, exportID, redactions, resolved.Definition.Policy.MaxRows)
 
 	renderer, ok := r.Renderers.Resolve(runReq.Format)
 	if !ok {
@@ -173,7 +197,7 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 		return ExportResult{}, AsGoError(err)
 	}
 
-	stats, err := renderer.Render(ctx, Schema{Columns: resolved.Columns}, tracked, runReq.Output, runReq.RenderOptions)
+	stats, err := renderer.Render(ctx, schema, tracked, runReq.Output, runReq.RenderOptions)
 	if err != nil {
 		r.fail(ctx, runInfo, err)
 		return ExportResult{}, AsGoError(err)
@@ -369,13 +393,13 @@ type trackingIterator struct {
 	currentRows int64
 }
 
-func newTrackingIterator(base RowIterator, resolved ResolvedExport, tracker ProgressTracker, exportID string) *trackingIterator {
+func newTrackingIterator(base RowIterator, tracker ProgressTracker, exportID string, redactions map[int]any, maxRows int) *trackingIterator {
 	return &trackingIterator{
 		base:       base,
 		tracker:    tracker,
 		exportID:   exportID,
-		redactions: resolved.RedactIndices,
-		maxRows:    resolved.Definition.Policy.MaxRows,
+		redactions: redactions,
+		maxRows:    maxRows,
 	}
 }
 
