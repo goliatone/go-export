@@ -139,11 +139,14 @@ func (c *Controller) Serve(req Request, res Response) {
 		case 1:
 			c.handleStatus(req, res, parts[0])
 		case 2:
-			if parts[1] != "download" {
+			switch parts[1] {
+			case "download":
+				c.handleDownload(req, res, parts[0])
+			case "preview":
+				c.handlePreview(req, res, parts[0])
+			default:
 				writeNotFound(res)
-				return
 			}
-			c.handleDownload(req, res, parts[0])
 		default:
 			writeNotFound(res)
 		}
@@ -439,6 +442,76 @@ func (c *Controller) handleDownload(req Request, res Response, exportID string) 
 	}
 }
 
+func (c *Controller) handlePreview(req Request, res Response, exportID string) {
+	if c.service == nil {
+		WriteError(res, export.NewError(export.KindNotImpl, "export service not configured", nil))
+		return
+	}
+	if c.store == nil {
+		WriteError(res, export.NewError(export.KindNotImpl, "artifact store not configured", nil))
+		return
+	}
+	actor, err := c.actorFromRequest(req)
+	if err != nil {
+		WriteError(res, err)
+		return
+	}
+
+	info, err := c.service.DownloadMetadata(req.Context(), actor, exportID)
+	if err != nil {
+		WriteError(res, err)
+		return
+	}
+
+	reader, meta, err := c.store.Open(req.Context(), info.Artifact.Key)
+	if err != nil {
+		WriteError(res, err)
+		return
+	}
+	defer reader.Close()
+
+	if meta.ContentType != "" {
+		mediaType, _, err := mime.ParseMediaType(meta.ContentType)
+		if err != nil {
+			mediaType = meta.ContentType
+		}
+		if mediaType != "text/html" {
+			WriteError(res, export.NewError(export.KindValidation, "preview only supports HTML artifacts", nil))
+			return
+		}
+	}
+
+	filename := meta.Filename
+	if filename == "" {
+		filename = "export-preview.html"
+	}
+	filename = sanitizeFilename(filename, export.FormatTemplate)
+
+	setPreviewHeaders(res, exportID, filename)
+	if meta.Size > 0 {
+		res.SetHeader("Content-Length", fmt.Sprintf("%d", meta.Size))
+	}
+
+	if writer, ok := res.Writer(); ok {
+		res.WriteHeader(http.StatusOK)
+		if _, err := io.Copy(writer, reader); err != nil {
+			c.logger.Errorf("preview copy failed: %v", err)
+		}
+		return
+	}
+
+	buffer := newLimitedBuffer(c.maxBufferBytes)
+	if _, err := io.Copy(buffer, reader); err != nil {
+		WriteError(res, err)
+		return
+	}
+
+	res.WriteHeader(http.StatusOK)
+	if _, err := res.Write(buffer.Bytes()); err != nil {
+		c.logger.Errorf("preview buffer write failed: %v", err)
+	}
+}
+
 func (c *Controller) handleDelete(req Request, res Response, exportID string) {
 	if c.service == nil {
 		WriteError(res, export.NewError(export.KindNotImpl, "export service not configured", nil))
@@ -630,6 +703,14 @@ func setDownloadHeaders(res Response, exportID, filename, contentType string) {
 	}
 	res.SetHeader("Content-Type", contentType)
 	res.SetHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	if exportID != "" {
+		res.SetHeader("X-Export-Id", exportID)
+	}
+}
+
+func setPreviewHeaders(res Response, exportID, filename string) {
+	res.SetHeader("Content-Type", "text/html; charset=utf-8")
+	res.SetHeader("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
 	if exportID != "" {
 		res.SetHeader("X-Export-Id", exportID)
 	}
