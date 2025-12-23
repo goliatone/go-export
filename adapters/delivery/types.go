@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/goliatone/go-export/export"
+	"github.com/goliatone/go-export/export/notify"
 )
 
 // DeliveryMode controls how artifacts are delivered.
@@ -58,7 +59,19 @@ type Request struct {
 	Mode     DeliveryMode         `json:"mode"`
 	LinkTTL  time.Duration        `json:"link_ttl,omitempty"`
 	Message  Message              `json:"message,omitempty"`
+	Notify   NotificationRequest  `json:"notify,omitempty"`
 	Metadata map[string]any       `json:"metadata,omitempty"`
+}
+
+// NotificationRequest configures export-ready notifications.
+type NotificationRequest struct {
+	Recipients       []string                        `json:"recipients,omitempty"`
+	Channels         []string                        `json:"channels,omitempty"`
+	Message          string                          `json:"message,omitempty"`
+	Parts            int                             `json:"parts,omitempty"`
+	ManifestURL      string                          `json:"manifest_url,omitempty"`
+	ChannelOverrides map[string]map[string]any       `json:"channel_overrides,omitempty"`
+	Attachments      []notify.NotificationAttachment `json:"attachments,omitempty"`
 }
 
 // Attachment captures file data for delivery.
