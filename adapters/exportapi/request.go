@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"strings"
+	"net/url"
 	"time"
 
 	"github.com/goliatone/go-export/export"
@@ -15,6 +15,7 @@ type Request interface {
 	Context() context.Context
 	Method() string
 	Path() string
+	URL() *url.URL
 	Header(name string) string
 	Query(name string) string
 	Body() io.ReadCloser
@@ -65,8 +66,9 @@ func (d JSONRequestDecoder) Decode(req Request) (export.ExportRequest, error) {
 
 	reqModel := export.ExportRequest{
 		Definition:        payload.Definition,
+		Resource:          payload.Resource,
 		SourceVariant:     payload.SourceVariant,
-		Format:            normalizeFormat(payload.Format),
+		Format:            export.NormalizeFormat(payload.Format),
 		Query:             query,
 		Selection:         payload.Selection.toSelection(),
 		Columns:           payload.Columns,
@@ -83,18 +85,9 @@ func (d JSONRequestDecoder) Decode(req Request) (export.ExportRequest, error) {
 	return reqModel, nil
 }
 
-func normalizeFormat(format export.Format) export.Format {
-	normalized := strings.ToLower(strings.TrimSpace(string(format)))
-	switch normalized {
-	case "excel", "xls":
-		return export.FormatXLSX
-	default:
-		return export.Format(normalized)
-	}
-}
-
 type requestPayload struct {
 	Definition        string               `json:"definition"`
+	Resource          string               `json:"resource,omitempty"`
 	SourceVariant     string               `json:"source_variant,omitempty"`
 	Format            export.Format        `json:"format,omitempty"`
 	Query             json.RawMessage      `json:"query,omitempty"`

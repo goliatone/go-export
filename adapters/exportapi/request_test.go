@@ -3,6 +3,7 @@ package exportapi
 import (
 	"context"
 	"io"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ type stubRequest struct {
 func (s stubRequest) Context() context.Context { return context.Background() }
 func (s stubRequest) Method() string           { return "POST" }
 func (s stubRequest) Path() string             { return "/admin/exports" }
+func (s stubRequest) URL() *url.URL            { return nil }
 func (s stubRequest) Header(string) string     { return "" }
 func (s stubRequest) Query(string) string      { return "" }
 func (s stubRequest) Body() io.ReadCloser      { return s.body }
@@ -41,6 +43,33 @@ func TestJSONRequestDecoder_FormatLowercase(t *testing.T) {
 	}
 	if req.Format != export.FormatCSV {
 		t.Fatalf("expected csv, got %q", req.Format)
+	}
+}
+
+func TestJSONRequestDecoder_DefaultFormat(t *testing.T) {
+	payload := `{"definition":"users"}`
+	decoder := JSONRequestDecoder{}
+	req, err := decoder.Decode(stubRequest{body: io.NopCloser(strings.NewReader(payload))})
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if req.Format != export.FormatCSV {
+		t.Fatalf("expected csv default, got %q", req.Format)
+	}
+}
+
+func TestJSONRequestDecoder_SelectionIDs(t *testing.T) {
+	payload := `{"definition":"users","selection":{"mode":"ids","ids":["a","b"]}}`
+	decoder := JSONRequestDecoder{}
+	req, err := decoder.Decode(stubRequest{body: io.NopCloser(strings.NewReader(payload))})
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if req.Selection.Mode != export.SelectionIDs {
+		t.Fatalf("expected ids mode, got %q", req.Selection.Mode)
+	}
+	if len(req.Selection.IDs) != 2 || req.Selection.IDs[0] != "a" || req.Selection.IDs[1] != "b" {
+		t.Fatalf("expected selection ids, got %v", req.Selection.IDs)
 	}
 }
 

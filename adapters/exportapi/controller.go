@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,40 +27,46 @@ type AsyncRequester interface {
 
 // Config configures the shared export API controller.
 type Config struct {
-	Service          export.Service
-	Runner           *export.Runner
-	Store            export.ArtifactStore
-	Guard            export.Guard
-	ActorProvider    export.ActorProvider
-	DeliveryPolicy   export.DeliveryPolicy
-	AsyncRequester   AsyncRequester
-	BasePath         string
-	SignedURLTTL     time.Duration
-	IdempotencyStore IdempotencyStore
-	IdempotencyTTL   time.Duration
-	Logger           export.Logger
-	IDGenerator      func() string
-	RequestDecoder   RequestDecoder
-	MaxBufferBytes   int64
+	Service             export.Service
+	Runner              *export.Runner
+	Store               export.ArtifactStore
+	Guard               export.Guard
+	ActorProvider       export.ActorProvider
+	DeliveryPolicy      export.DeliveryPolicy
+	AsyncRequester      AsyncRequester
+	BasePath            string
+	HistoryPath         string
+	SignedURLTTL        time.Duration
+	IdempotencyStore    IdempotencyStore
+	IdempotencyTTL      time.Duration
+	Logger              export.Logger
+	IDGenerator         func() string
+	RequestDecoder      RequestDecoder
+	QueryRequestDecoder RequestDecoder
+	DefinitionResolver  DefinitionResolver
+	MaxBufferBytes      int64
 }
 
 // Controller exposes export API handlers for multiple transports.
 type Controller struct {
-	service          export.Service
-	runner           *export.Runner
-	store            export.ArtifactStore
-	guard            export.Guard
-	actorProvider    export.ActorProvider
-	deliveryPolicy   export.DeliveryPolicy
-	asyncRequester   AsyncRequester
-	basePath         string
-	signedURLTTL     time.Duration
-	idempotencyStore IdempotencyStore
-	idempotencyTTL   time.Duration
-	logger           export.Logger
-	idGenerator      func() string
-	requestDecoder   RequestDecoder
-	maxBufferBytes   int64
+	service            export.Service
+	runner             *export.Runner
+	store              export.ArtifactStore
+	guard              export.Guard
+	actorProvider      export.ActorProvider
+	deliveryPolicy     export.DeliveryPolicy
+	asyncRequester     AsyncRequester
+	basePath           string
+	historyPath        string
+	signedURLTTL       time.Duration
+	idempotencyStore   IdempotencyStore
+	idempotencyTTL     time.Duration
+	logger             export.Logger
+	idGenerator        func() string
+	requestDecoder     RequestDecoder
+	queryDecoder       RequestDecoder
+	definitionResolver DefinitionResolver
+	maxBufferBytes     int64
 }
 
 // NewController creates a shared export API controller.
@@ -76,6 +83,18 @@ func NewController(cfg Config) *Controller {
 	if decoder == nil {
 		decoder = JSONRequestDecoder{}
 	}
+	queryDecoder := cfg.QueryRequestDecoder
+	if queryDecoder == nil {
+		queryDecoder = QueryRequestDecoder{}
+	}
+	historyPath := strings.TrimRight(cfg.HistoryPath, "/")
+	if historyPath == "" {
+		historyPath = path.Join(basePath, "history")
+	}
+	definitionResolver := cfg.DefinitionResolver
+	if definitionResolver == nil && cfg.Runner != nil && cfg.Runner.Definitions != nil {
+		definitionResolver = NewDefinitionResolver(cfg.Runner.Definitions)
+	}
 	maxBuffer := cfg.MaxBufferBytes
 	if maxBuffer <= 0 {
 		maxBuffer = DefaultMaxBufferBytes
@@ -85,21 +104,24 @@ func NewController(cfg Config) *Controller {
 		asyncRequester = cfg.Service
 	}
 	return &Controller{
-		service:          cfg.Service,
-		runner:           cfg.Runner,
-		store:            cfg.Store,
-		guard:            cfg.Guard,
-		actorProvider:    cfg.ActorProvider,
-		deliveryPolicy:   cfg.DeliveryPolicy,
-		asyncRequester:   asyncRequester,
-		basePath:         basePath,
-		signedURLTTL:     cfg.SignedURLTTL,
-		idempotencyStore: cfg.IdempotencyStore,
-		idempotencyTTL:   cfg.IdempotencyTTL,
-		logger:           logger,
-		idGenerator:      cfg.IDGenerator,
-		requestDecoder:   decoder,
-		maxBufferBytes:   maxBuffer,
+		service:            cfg.Service,
+		runner:             cfg.Runner,
+		store:              cfg.Store,
+		guard:              cfg.Guard,
+		actorProvider:      cfg.ActorProvider,
+		deliveryPolicy:     cfg.DeliveryPolicy,
+		asyncRequester:     asyncRequester,
+		basePath:           basePath,
+		historyPath:        historyPath,
+		signedURLTTL:       cfg.SignedURLTTL,
+		idempotencyStore:   cfg.IdempotencyStore,
+		idempotencyTTL:     cfg.IdempotencyTTL,
+		logger:             logger,
+		idGenerator:        cfg.IDGenerator,
+		requestDecoder:     decoder,
+		queryDecoder:       queryDecoder,
+		definitionResolver: definitionResolver,
+		maxBufferBytes:     maxBuffer,
 	}
 }
 
@@ -109,6 +131,26 @@ func (c *Controller) BasePath() string {
 		return ""
 	}
 	return c.basePath
+}
+
+// HistoryPath returns the configured history path.
+func (c *Controller) HistoryPath() string {
+	if c == nil {
+		return ""
+	}
+	return c.historyPath
+}
+
+func (c *Controller) isHistoryPath(candidate string) bool {
+	if c == nil {
+		return false
+	}
+	history := strings.TrimRight(c.historyPath, "/")
+	path := strings.TrimRight(candidate, "/")
+	if history == "" || path == "" {
+		return false
+	}
+	return history == path
 }
 
 // Serve routes export endpoints using the shared controller.
@@ -122,6 +164,15 @@ func (c *Controller) Serve(req Request, res Response) {
 	}
 	if req == nil {
 		WriteError(res, export.NewError(export.KindInternal, "request is nil", nil))
+		return
+	}
+	if c.isHistoryPath(req.Path()) {
+		if req.Method() != http.MethodGet {
+			res.SetHeader("Allow", "GET")
+			res.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		c.handleList(req, res)
 		return
 	}
 	if !strings.HasPrefix(req.Path(), c.basePath) {
@@ -142,11 +193,11 @@ func (c *Controller) Serve(req Request, res Response) {
 			writeNotFound(res)
 			return
 		}
-		c.handlePost(req, res)
+		c.handleRequest(req, res)
 	case http.MethodGet:
 		switch len(parts) {
 		case 0:
-			c.handleList(req, res)
+			c.handleRequest(req, res)
 		case 1:
 			c.handleStatus(req, res, parts[0])
 		case 2:
@@ -173,12 +224,8 @@ func (c *Controller) Serve(req Request, res Response) {
 	}
 }
 
-func (c *Controller) handlePost(req Request, res Response) {
-	if c.requestDecoder == nil {
-		WriteError(res, export.NewError(export.KindInternal, "request decoder not configured", nil))
-		return
-	}
-	decoded, err := c.requestDecoder.Decode(req)
+func (c *Controller) handleRequest(req Request, res Response) {
+	decoded, err := c.decodeRequest(req)
 	if err != nil {
 		WriteError(res, err)
 		return
@@ -193,7 +240,8 @@ func (c *Controller) handlePost(req Request, res Response) {
 		return
 	}
 
-	resolved, err := c.resolve(decoded)
+	// Resolve definition/resource before guard checks.
+	resolved, err := c.resolve(req.Context(), decoded)
 	if err != nil {
 		WriteError(res, err)
 		return
@@ -205,6 +253,31 @@ func (c *Controller) handlePost(req Request, res Response) {
 		return
 	}
 	c.handleSync(req, res, actor, resolved)
+}
+
+func (c *Controller) decodeRequest(req Request) (export.ExportRequest, error) {
+	if c.shouldUseQueryDecoder(req) && c.queryDecoder != nil {
+		return c.queryDecoder.Decode(req)
+	}
+	if c.requestDecoder != nil {
+		return c.requestDecoder.Decode(req)
+	}
+	return export.ExportRequest{}, export.NewError(export.KindInternal, "request decoder not configured", nil)
+}
+
+func (c *Controller) shouldUseQueryDecoder(req Request) bool {
+	if req == nil {
+		return false
+	}
+	if req.Method() == http.MethodGet {
+		return true
+	}
+	if raw := strings.TrimSpace(req.Header("Content-Length")); raw != "" {
+		if size, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			return size == 0
+		}
+	}
+	return req.Body() == nil
 }
 
 func (c *Controller) handleAsync(req Request, res Response, actor export.Actor, resolved export.ResolvedExport) {
@@ -426,11 +499,18 @@ func (c *Controller) handleDownload(req Request, res Response, exportID string) 
 	if filename == "" {
 		filename = path.Base(info.Artifact.Key)
 	}
+	format := formatFromPath(filename)
+	if format == export.FormatTemplate {
+		filename = strings.TrimSuffix(filename, filepath.Ext(filename)) + ".html"
+	}
 	contentType := meta.ContentType
 	if contentType == "" {
-		contentType = mime.TypeByExtension(filepath.Ext(filename))
+		if format != "" {
+			contentType = contentTypeForFormat(format)
+		} else {
+			contentType = mime.TypeByExtension(filepath.Ext(filename))
+		}
 	}
-	format := formatFromPath(filename)
 	filename = sanitizeFilename(filename, format)
 	setDownloadHeaders(res, info.ExportID, filename, contentType)
 	if meta.Size > 0 {
@@ -620,9 +700,19 @@ func (c *Controller) actorFromRequest(req Request) (export.Actor, error) {
 	return actor, nil
 }
 
-func (c *Controller) resolve(req export.ExportRequest) (export.ResolvedExport, error) {
+func (c *Controller) resolve(ctx context.Context, req export.ExportRequest) (export.ResolvedExport, error) {
 	if c.runner == nil || c.runner.Definitions == nil {
 		return export.ResolvedExport{}, export.NewError(export.KindInternal, "definition registry not configured", nil)
+	}
+	if req.Definition == "" && strings.TrimSpace(req.Resource) != "" {
+		if c.definitionResolver == nil {
+			return export.ResolvedExport{}, export.NewError(export.KindInternal, "definition resolver not configured", nil)
+		}
+		definition, err := c.definitionResolver.ResolveDefinition(ctx, req)
+		if err != nil {
+			return export.ResolvedExport{}, err
+		}
+		req.Definition = definition
 	}
 	now := time.Now()
 	if c.runner.Now != nil {
@@ -816,6 +906,8 @@ func formatFromPath(name string) export.Format {
 		return export.FormatNDJSON
 	case "xlsx":
 		return export.FormatXLSX
+	case "template":
+		return export.FormatTemplate
 	case "html":
 		return export.FormatTemplate
 	case "pdf":
