@@ -12,7 +12,7 @@ go-export provides a streaming export engine with guard-first authorization, plu
 ## Package Layout
 ```
 export/        Core runner, validation, registries, service, memory adapters
-adapters/      exportapi (shared transport), router, http, job, tracker, store, template, activity adapters
+adapters/      exportapi (shared transport), router, http, job, tracker, store, template, activity, delivery adapters
 sources/       crud, repo, sql, callback row sources
 command/       go-command commands
 query/         go-command queries
@@ -66,6 +66,7 @@ fetch('/admin/exports', {
   body: JSON.stringify(payload)
 });
 ```
+History is served at `GET /admin/exports/history`. Querystring exports are supported via `GET /admin/exports?definition=users&format=csv`.
 To ship the helper with a Go app (go-formgen pattern), serve the embedded assets from `export.RuntimeAssetsFS()`:
 ```go
 mux.Handle("/assets/",
@@ -113,11 +114,13 @@ Built-in renderers stream results without loading all rows:
 - CSV (headers, delimiter)
 - JSON array or NDJSON
 - XLSX streaming writer with type-aware formatting
-- Template renderer via `adapters/template` using go-template (Django/Pongo2 syntax); enable explicitly and choose buffered vs streaming strategies (buffered default). PDF conversion is not implemented; use wkhtmltopdf/headless Chrome externally.
+- Template renderer via `adapters/template` using go-template (Django/Pongo2 syntax); enable explicitly and choose buffered vs streaming strategies (buffered default).
+- Server-side PDF renderer via `adapters/pdf` (Format `pdf`), gated by `Enabled`, with a wkhtmltopdf engine or a custom chromedp/rod engine.
 
 Renderer behavior summary:
 - CSV/JSON/NDJSON/XLSX: streaming
 - Template: buffered by default; streaming supported when templates range over `.Rows` (channel-backed)
+- PDF: HTML template render + server-side conversion (buffered HTML)
 
 ### Delivery Modes
 `DeliveryAuto` selects sync or async based on configured thresholds.
