@@ -26,6 +26,7 @@ func (h *Handler) RegisterRoutes(router any) {
 		return
 	}
 	base := h.basePath()
+	history := h.historyPath()
 
 	r.Post(base, h.Handle)
 	r.Post(base+"/", h.Handle)
@@ -35,6 +36,10 @@ func (h *Handler) RegisterRoutes(router any) {
 	r.Get(base+"/:id/download", h.Handle)
 	r.Get(base+"/:id/preview", h.Handle)
 	r.Delete(base+"/:id", h.Handle)
+	if history != "" {
+		r.Get(history, h.Handle)
+		r.Get(history+"/", h.Handle)
+	}
 }
 
 // Handle executes the shared export workflow.
@@ -57,6 +62,17 @@ func (h *Handler) basePath() string {
 	path := h.controller.BasePath()
 	if path == "" {
 		return "/admin/exports"
+	}
+	return path
+}
+
+func (h *Handler) historyPath() string {
+	if h == nil || h.controller == nil {
+		return "/admin/exports/history"
+	}
+	path := h.controller.HistoryPath()
+	if path == "" {
+		return "/admin/exports/history"
 	}
 	return path
 }
