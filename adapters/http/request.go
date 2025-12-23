@@ -10,3 +10,6 @@ type QueryDecoder = exportapi.QueryDecoder
 
 // JSONRequestDecoder decodes JSON into export requests.
 type JSONRequestDecoder = exportapi.JSONRequestDecoder
+
+// QueryRequestDecoder decodes querystring payloads into export requests.
+type QueryRequestDecoder = exportapi.QueryRequestDecoder
