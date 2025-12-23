@@ -9,6 +9,9 @@ export LGR_NO_TIMESTAMP=true
 
 VERSION_FILE="./.version"
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # If we have a .taskenv file load it as source
 # the file should be e.g.
 # #!/bin/bash
@@ -24,6 +27,9 @@ PATH=$(pwd)/node_modules/.bin:$PATH
 
 # This will make all scripts available in the ./src/bin directory
 PATH=$(pwd)/src/bin:$PATH
+
+# Add local bin directory (for mailpit, etc.)
+PATH="${SCRIPT_DIR}/bin:$PATH"
 
 
 #################################################
@@ -80,6 +86,32 @@ function _install:envset {
     fi
 }
 
+function _install:mailpit {
+    local BIN_DIR="${SCRIPT_DIR}/bin"
+
+    # Create bin directory if it doesn't exist
+    mkdir -p "${BIN_DIR}"
+
+    # Check if already installed
+    if [[ -x "${BIN_DIR}/mailpit" ]]; then
+        lgr OK "mailpit already installed..."
+        return 0
+    fi
+
+    lgr I "Installing mailpit to ${BIN_DIR}"
+
+    local os="darwin"
+    local arch="arm64"
+    local version="1.18.3"
+    local BIN_URL="https://github.com/axllent/mailpit/releases/download/v${version}/mailpit-${os}-${arch}.tar.gz"
+    local TMP_ZIP="${TMPDIR:-/tmp}/mailpit.tar.gz"
+
+    curl --silent --show-error --location --fail "$BIN_URL" --output "${TMP_ZIP}" &&
+    tar -xvf "${TMP_ZIP}" -C "${BIN_DIR}" mailpit &&
+    chmod +x "${BIN_DIR}/mailpit" &&
+    lgr OK "mailpit installed to ${BIN_DIR}/mailpit"
+}
+
 function lgr {
   if command -v lgr >/dev/null 2>&1; then
     command lgr "$@"
@@ -100,6 +132,7 @@ function dev:install {
 
     _install:envset
     _install:changelog
+    _install:mailpit
 
     lgr ok "dependencies intalled..."
 }
@@ -110,11 +143,40 @@ function dev:env:load {
 
 
 function dev:serve {
-    export EXPORT_PDF_ENABLED=true;
-    export EXPORT_PDF_ENGINE=chromium;
+    export PORT="8324";
+    export EXPORT_PDF_ENABLED="true";
+    export EXPORT_PDF_ENGINE="chromium";
+    export EXPORT_NOTIFY_ENABLED="true";
+    export EXPORT_NOTIFY_RECIPIENTS="admin@example.com";
+    export EXPORT_NOTIFY_SMTP_HOST="localhost";
+    export EXPORT_NOTIFY_SMTP_PORT="1025";
+    export EXPORT_NOTIFY_SMTP_FROM="no-reply@example.com";
+    export EXPORT_NOTIFY_SMTP_STARTTLS="false";
+    export EXPORT_NOTIFY_SMTP_USERNAME="User1";
+    export EXPORT_NOTIFY_SMTP_PASSWORD="Password1";
     export EXPORT_PDF_CHROMIUM_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-    export EXPORT_PDF_CHROMIUM_ARGS="--no-sandbox,--disable-dev-shm-usage,--disable-gpu"
+    export EXPORT_PDF_CHROMIUM_ARGS="--no-sandbox,--disable-dev-shm-usage,--disable-gpu";
     go run .
+}
+
+function dev:smtp {
+    lgr I "starting SMTP server..."
+    lgr W "more info at https://github.com/axllent/mailpit"
+    lgr OK "http://0.0.0.0:8025"
+    mailpit \
+        --smtp-auth-allow-insecure \
+        --smtp-tls-cert "$SCRIPT_DIR/ops/mailpit/pub_cert.pem" \
+        --smtp-tls-key "$SCRIPT_DIR/ops/mailpit/priv_key.pem" \
+        --ui-auth-file "$SCRIPT_DIR/ops/mailpit/development.txt" \
+        --smtp-auth-file "$SCRIPT_DIR/ops/mailpit/development.txt"
+}
+
+function dev:smtp:init {
+    mkdir -p "$SCRIPT_DIR/ops/mailpit"
+    openssl req -x509 -newkey rsa:4096 -nodes \
+        -keyout "$SCRIPT_DIR/ops/mailpit/priv_key.pem" \
+        -out "$SCRIPT_DIR/ops/mailpit/pub_cert.pem" \
+        -sha256 -days 3650
 }
 
 ##########################################
