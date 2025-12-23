@@ -29,6 +29,7 @@ type SelectionQueryPayload struct {
 // DatagridRequest captures the datagrid export contract payload.
 type DatagridRequest struct {
 	Definition     string              `json:"definition"`
+	Resource       string              `json:"resource,omitempty"`
 	Format         export.Format       `json:"format,omitempty"`
 	Query          *Query              `json:"query,omitempty"`
 	Selection      SelectionPayload    `json:"selection,omitempty"`
@@ -46,6 +47,7 @@ func (r DatagridRequest) ExportRequest() export.ExportRequest {
 	}
 	return export.ExportRequest{
 		Definition:     r.Definition,
+		Resource:       r.Resource,
 		Format:         r.Format,
 		Query:          r.Query,
 		Selection:      r.Selection.toSelection(),
