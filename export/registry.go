@@ -2,6 +2,7 @@ package export
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -79,6 +80,32 @@ func (r *DefinitionRegistry) Resolve(req ExportRequest) (ResolvedDefinition, err
 	}
 
 	return resolved, nil
+}
+
+// ResolveByResource finds a definition by resource name.
+func (r *DefinitionRegistry) ResolveByResource(resource string) (ExportDefinition, error) {
+	resource = strings.TrimSpace(resource)
+	if resource == "" {
+		return ExportDefinition{}, NewError(KindValidation, "resource is required", nil)
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var match ExportDefinition
+	found := false
+	for _, def := range r.defs {
+		if def.Resource != resource {
+			continue
+		}
+		if found {
+			return ExportDefinition{}, NewError(KindValidation, fmt.Sprintf("resource %q matches multiple definitions", resource), nil)
+		}
+		match = def
+		found = true
+	}
+	if !found {
+		return ExportDefinition{}, NewError(KindValidation, fmt.Sprintf("resource %q not found", resource), nil)
+	}
+	return match, nil
 }
 
 // RowSourceFactory creates a RowSource for a request.
