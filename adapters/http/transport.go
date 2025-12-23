@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/goliatone/go-export/adapters/exportapi"
 )
@@ -32,6 +33,13 @@ func (req httpRequest) Path() string {
 		return ""
 	}
 	return req.r.URL.Path
+}
+
+func (req httpRequest) URL() *url.URL {
+	if req.r == nil {
+		return nil
+	}
+	return req.r.URL
 }
 
 func (req httpRequest) Header(name string) string {
