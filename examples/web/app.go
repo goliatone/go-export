@@ -7,18 +7,21 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/flosch/pongo2/v6"
 	"github.com/goliatone/go-command/dispatcher"
+	exportdelivery "github.com/goliatone/go-export/adapters/delivery"
 	exportjob "github.com/goliatone/go-export/adapters/job"
 	exportpdf "github.com/goliatone/go-export/adapters/pdf"
 	exporttemplate "github.com/goliatone/go-export/adapters/template"
 	"github.com/goliatone/go-export/examples"
 	"github.com/goliatone/go-export/examples/web/config"
 	"github.com/goliatone/go-export/export"
+	"github.com/goliatone/go-export/export/notify"
 	exportcallback "github.com/goliatone/go-export/sources/callback"
 	exportcrud "github.com/goliatone/go-export/sources/crud"
 	gojob "github.com/goliatone/go-job"
@@ -32,6 +35,7 @@ type App struct {
 	Runner         *export.Runner
 	Tracker        export.ProgressTracker
 	Store          export.ArtifactStore
+	Delivery       *exportdelivery.Service
 	Scheduler      *exportjob.Scheduler
 	GenerateTask   *exportjob.GenerateTask
 	CancelRegistry *exportjob.CancelRegistry
@@ -85,9 +89,12 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 	if cfg.Export.EnableAsync && cfg.Export.MaxRows > 0 {
 		deliveryPolicy.Thresholds.MaxRows = cfg.Export.MaxRows
 	}
+	if cfg.Export.EnableAsync && cfg.Export.Notifications.Enabled {
+		deliveryPolicy.Default = export.DeliveryAsync
+	}
 	runner.DeliveryPolicy = deliveryPolicy
 
-	service := export.NewService(export.ServiceConfig{
+	baseService := export.NewService(export.ServiceConfig{
 		Runner:         runner,
 		Tracker:        tracker,
 		Store:          store,
@@ -95,6 +102,20 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		DeliveryPolicy: deliveryPolicy,
 		CancelHook:     cancelRegistry,
 	})
+	service := baseService
+
+	var notifier notify.ExportReadyNotifier
+	if cfg.Export.Notifications.Enabled {
+		setup, err := setupExportReadyNotifier(ctx, logger, cfg.Export.Notifications)
+		if err != nil {
+			return nil, fmt.Errorf("failed to setup notifications: %w", err)
+		}
+		notifier = setup
+		if notifier != nil {
+			baseURL := buildServerBaseURL(cfg.Server)
+			service = newNotifyingService(service, store, notifier, cfg.Export.Notifications, logger, baseURL)
+		}
+	}
 
 	// Register go-command handlers
 	subscriptions, err := examples.RegisterExportHandlers(nil, service)
@@ -137,18 +158,34 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		})
 	}
 
-	return &App{
+	var delivery *exportdelivery.Service
+	if notifier != nil {
+		delivery = exportdelivery.NewService(exportdelivery.Config{
+			Service:     baseService,
+			Store:       store,
+			EmailSender: logEmailSender{logger: logger},
+			Logger:      logger,
+			Notifier:    notifier,
+		})
+	}
+
+	app := &App{
 		Config:         cfg,
 		Logger:         logger,
 		Service:        service,
 		Runner:         runner,
 		Tracker:        tracker,
 		Store:          store,
+		Delivery:       delivery,
 		Scheduler:      scheduler,
 		GenerateTask:   generateTask,
 		CancelRegistry: cancelRegistry,
 		subscriptions:  subscriptions,
-	}, nil
+	}
+
+	app.maybeSendDemoNotification(ctx)
+
+	return app, nil
 }
 
 // Close releases app resources.
@@ -284,6 +321,18 @@ func (s *FSStore) Delete(ctx context.Context, key string) error {
 func (s *FSStore) SignedURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
 	// For local development, just return the file path
 	return s.path(key), nil
+}
+
+func buildServerBaseURL(cfg config.ServerConfig) string {
+	host := strings.TrimSpace(cfg.Host)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+	port := strings.TrimSpace(cfg.Port)
+	if port == "" {
+		return "http://" + host
+	}
+	return fmt.Sprintf("http://%s:%s", host, port)
 }
 
 // registerDemoSources adds demo row sources to the registry.
@@ -540,6 +589,15 @@ func toPongo2Context(data any) (pongo2.Context, error) {
 	if m, ok := data.(map[string]any); ok {
 		return pongo2.Context(m), nil
 	}
+	if m, ok := data.(pongo2.Context); ok {
+		return m, nil
+	}
+	if ctx, ok := mapFromStringKeyedMap(data); ok {
+		return ctx, nil
+	}
+	if ctx, ok := mapFromStruct(data); ok {
+		return ctx, nil
+	}
 
 	// Convert struct to map via JSON round-trip
 	jsonBytes, err := json.Marshal(data)
@@ -553,6 +611,90 @@ func toPongo2Context(data any) (pongo2.Context, error) {
 	}
 
 	return pongo2.Context(result), nil
+}
+
+func mapFromStruct(data any) (pongo2.Context, bool) {
+	value := reflect.ValueOf(data)
+	if !value.IsValid() {
+		return pongo2.Context{}, true
+	}
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return pongo2.Context{}, true
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		return nil, false
+	}
+
+	ctx := pongo2.Context{}
+	addStructFields(ctx, value)
+	return ctx, true
+}
+
+func addStructFields(ctx pongo2.Context, value reflect.Value) {
+	typ := value.Type()
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.PkgPath != "" && !field.Anonymous {
+			continue
+		}
+
+		fieldValue := value.Field(i)
+		if field.Anonymous {
+			if fieldValue.Kind() == reflect.Pointer {
+				if fieldValue.IsNil() {
+					continue
+				}
+				fieldValue = fieldValue.Elem()
+			}
+			if fieldValue.Kind() == reflect.Struct {
+				addStructFields(ctx, fieldValue)
+				continue
+			}
+		}
+
+		if !fieldValue.CanInterface() {
+			continue
+		}
+		ctx[field.Name] = fieldValue.Interface()
+
+		if tag := field.Tag.Get("json"); tag != "" {
+			name := strings.Split(tag, ",")[0]
+			if name != "" && name != "-" {
+				if _, exists := ctx[name]; !exists {
+					ctx[name] = fieldValue.Interface()
+				}
+			}
+		}
+	}
+}
+
+func mapFromStringKeyedMap(data any) (pongo2.Context, bool) {
+	value := reflect.ValueOf(data)
+	if !value.IsValid() {
+		return pongo2.Context{}, true
+	}
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			return pongo2.Context{}, true
+		}
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Map || value.Type().Key().Kind() != reflect.String {
+		return nil, false
+	}
+
+	ctx := pongo2.Context{}
+	for _, key := range value.MapKeys() {
+		val := value.MapIndex(key)
+		if !val.IsValid() {
+			continue
+		}
+		ctx[key.String()] = val.Interface()
+	}
+	return ctx, true
 }
 
 func boolPtr(value bool) *bool {
