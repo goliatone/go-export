@@ -58,11 +58,35 @@ func (denyDownloadGuard) AuthorizeDownload(ctx context.Context, actor export.Act
 	return errors.New("denied")
 }
 
+type captureGuard struct {
+	called     bool
+	definition string
+	resource   string
+}
+
+func (g *captureGuard) AuthorizeExport(ctx context.Context, actor export.Actor, req export.ExportRequest, def export.ResolvedDefinition) error {
+	_ = ctx
+	_ = actor
+	_ = req
+	g.called = true
+	g.definition = def.Name
+	g.resource = def.Resource
+	return nil
+}
+
+func (g *captureGuard) AuthorizeDownload(ctx context.Context, actor export.Actor, exportID string) error {
+	_ = ctx
+	_ = actor
+	_ = exportID
+	return nil
+}
+
 func newTestRunner(t *testing.T) *export.Runner {
 	t.Helper()
 	runner := export.NewRunner()
 	if err := runner.Definitions.Register(export.ExportDefinition{
 		Name:         "users",
+		Resource:     "users",
 		RowSourceKey: "stub",
 		Schema: export.Schema{Columns: []export.Column{
 			{Name: "id"},
@@ -223,5 +247,147 @@ func TestHandler_DownloadGuardRejects(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+}
+
+func TestHandler_GetExportUsesQueryDecoder(t *testing.T) {
+	runner := newTestRunner(t)
+	handler := NewHandler(Config{
+		Runner:        runner,
+		ActorProvider: StaticActorProvider{Actor: export.Actor{ID: "user-1"}},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/exports?definition=users&format=csv", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "id,name") {
+		t.Fatalf("expected csv content, got %q", rec.Body.String())
+	}
+}
+
+func TestHandler_HistoryRoute(t *testing.T) {
+	runner := newTestRunner(t)
+	tracker := export.NewMemoryTracker()
+	store := export.NewMemoryStore()
+	svc := export.NewService(export.ServiceConfig{
+		Runner:  runner,
+		Tracker: tracker,
+		Store:   store,
+	})
+
+	if _, err := tracker.Start(context.Background(), export.ExportRecord{
+		ID:         "exp-history",
+		Definition: "users",
+		Format:     export.FormatCSV,
+		State:      export.StateCompleted,
+	}); err != nil {
+		t.Fatalf("tracker start: %v", err)
+	}
+
+	handler := NewHandler(Config{
+		Service:       svc,
+		Runner:        runner,
+		ActorProvider: StaticActorProvider{Actor: export.Actor{ID: "user-1"}},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/exports/history", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "exp-history") {
+		t.Fatalf("expected history payload, got %q", rec.Body.String())
+	}
+}
+
+func TestHandler_CustomHistoryRoute(t *testing.T) {
+	runner := newTestRunner(t)
+	tracker := export.NewMemoryTracker()
+	store := export.NewMemoryStore()
+	svc := export.NewService(export.ServiceConfig{
+		Runner:  runner,
+		Tracker: tracker,
+		Store:   store,
+	})
+
+	if _, err := tracker.Start(context.Background(), export.ExportRecord{
+		ID:         "exp-history-custom",
+		Definition: "users",
+		Format:     export.FormatCSV,
+		State:      export.StateCompleted,
+	}); err != nil {
+		t.Fatalf("tracker start: %v", err)
+	}
+
+	handler := NewHandler(Config{
+		Service:       svc,
+		Runner:        runner,
+		HistoryPath:   "/admin/exports/archive",
+		ActorProvider: StaticActorProvider{Actor: export.Actor{ID: "user-1"}},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/exports/archive", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "exp-history-custom") {
+		t.Fatalf("expected history payload, got %q", rec.Body.String())
+	}
+}
+
+func TestHandler_ResourceResolver(t *testing.T) {
+	runner := newTestRunner(t)
+	guard := &captureGuard{}
+	handler := NewHandler(Config{
+		Runner:        runner,
+		Guard:         guard,
+		ActorProvider: StaticActorProvider{Actor: export.Actor{ID: "user-1"}},
+	})
+
+	body := `{"resource":"users","format":"csv","delivery":"sync"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/exports", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !guard.called {
+		t.Fatalf("expected guard to be called")
+	}
+	if guard.definition != "users" {
+		t.Fatalf("expected resolved definition users, got %q", guard.definition)
+	}
+	if guard.resource != "users" {
+		t.Fatalf("expected resolved resource users, got %q", guard.resource)
+	}
+}
+
+func TestHandler_ResourceResolverMissing(t *testing.T) {
+	runner := newTestRunner(t)
+	handler := NewHandler(Config{
+		Runner:        runner,
+		ActorProvider: StaticActorProvider{Actor: export.Actor{ID: "user-1"}},
+	})
+
+	body := `{"resource":"missing","format":"csv"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/exports", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }

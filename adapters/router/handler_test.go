@@ -52,7 +52,15 @@ func newTestRunner(t *testing.T) *export.Runner {
 	runner := export.NewRunner()
 	if err := runner.Definitions.Register(export.ExportDefinition{
 		Name:         "users",
+		Resource:     "users",
 		RowSourceKey: "stub",
+		AllowedFormats: []export.Format{
+			export.FormatCSV,
+			export.FormatJSON,
+			export.FormatNDJSON,
+			export.FormatXLSX,
+			export.FormatTemplate,
+		},
 		Schema: export.Schema{Columns: []export.Column{
 			{Name: "id"},
 			{Name: "name"},
