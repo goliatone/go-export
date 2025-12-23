@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/url"
+	"strings"
 
 	"github.com/goliatone/go-export/adapters/exportapi"
 	"github.com/goliatone/go-router"
@@ -34,6 +36,26 @@ func (req routerRequest) Path() string {
 		return ""
 	}
 	return req.ctx.Path()
+}
+
+func (req routerRequest) URL() *url.URL {
+	if req.ctx == nil {
+		return nil
+	}
+	if httpCtx, ok := router.AsHTTPContext(req.ctx); ok {
+		if httpReq := httpCtx.Request(); httpReq != nil {
+			return httpReq.URL
+		}
+	}
+	raw := strings.TrimSpace(req.ctx.OriginalURL())
+	if raw == "" {
+		return nil
+	}
+	parsed, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return nil
+	}
+	return parsed
 }
 
 func (req routerRequest) Header(name string) string {
