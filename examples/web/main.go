@@ -113,6 +113,61 @@ func main() {
 		cfg.Export.PDF.ExternalAssetsPolicy = policy
 	}
 
+	// Notification config overrides
+	if notifyEnabled := os.Getenv("EXPORT_NOTIFY_ENABLED"); notifyEnabled != "" {
+		if parsed, err := strconv.ParseBool(notifyEnabled); err == nil {
+			cfg.Export.Notifications.Enabled = parsed
+		}
+	}
+	if recipients := os.Getenv("EXPORT_NOTIFY_RECIPIENTS"); recipients != "" {
+		cfg.Export.Notifications.Recipients = splitCSV(recipients)
+	}
+	if channels := os.Getenv("EXPORT_NOTIFY_CHANNELS"); channels != "" {
+		cfg.Export.Notifications.Channels = splitCSV(channels)
+	}
+	if smtpHost := os.Getenv("EXPORT_NOTIFY_SMTP_HOST"); smtpHost != "" {
+		cfg.Export.Notifications.SMTP.Host = smtpHost
+	}
+	if smtpPort := os.Getenv("EXPORT_NOTIFY_SMTP_PORT"); smtpPort != "" {
+		if parsed, err := strconv.Atoi(smtpPort); err == nil {
+			cfg.Export.Notifications.SMTP.Port = parsed
+		}
+	}
+	if smtpFrom := os.Getenv("EXPORT_NOTIFY_SMTP_FROM"); smtpFrom != "" {
+		cfg.Export.Notifications.SMTP.From = smtpFrom
+	}
+	if smtpUser := os.Getenv("EXPORT_NOTIFY_SMTP_USERNAME"); smtpUser != "" {
+		cfg.Export.Notifications.SMTP.Username = smtpUser
+	}
+	if smtpPass := os.Getenv("EXPORT_NOTIFY_SMTP_PASSWORD"); smtpPass != "" {
+		cfg.Export.Notifications.SMTP.Password = smtpPass
+	}
+	if smtpTLS := os.Getenv("EXPORT_NOTIFY_SMTP_TLS"); smtpTLS != "" {
+		if parsed, err := strconv.ParseBool(smtpTLS); err == nil {
+			cfg.Export.Notifications.SMTP.UseTLS = parsed
+		}
+	}
+	if smtpStartTLS := os.Getenv("EXPORT_NOTIFY_SMTP_STARTTLS"); smtpStartTLS != "" {
+		if parsed, err := strconv.ParseBool(smtpStartTLS); err == nil {
+			cfg.Export.Notifications.SMTP.UseStartTLS = parsed
+		}
+	}
+	if smtpSkipVerify := os.Getenv("EXPORT_NOTIFY_SMTP_SKIP_TLS_VERIFY"); smtpSkipVerify != "" {
+		if parsed, err := strconv.ParseBool(smtpSkipVerify); err == nil {
+			cfg.Export.Notifications.SMTP.SkipTLSVerify = parsed
+		}
+	}
+	if smtpAuthDisabled := os.Getenv("EXPORT_NOTIFY_SMTP_AUTH_DISABLED"); smtpAuthDisabled != "" {
+		if parsed, err := strconv.ParseBool(smtpAuthDisabled); err == nil {
+			cfg.Export.Notifications.SMTP.AuthDisabled = parsed
+		}
+	}
+	if smtpPlainOnly := os.Getenv("EXPORT_NOTIFY_SMTP_PLAIN_ONLY"); smtpPlainOnly != "" {
+		if parsed, err := strconv.ParseBool(smtpPlainOnly); err == nil {
+			cfg.Export.Notifications.SMTP.PlainOnly = parsed
+		}
+	}
+
 	// Create application
 	app, err := NewApp(ctx, cfg)
 	if err != nil {
@@ -134,6 +189,7 @@ func main() {
 	go func() {
 		log.Printf("Starting server on http://%s", addr)
 		log.Printf("Export API: http://%s/admin/exports", addr)
+		log.Printf("Export History: http://%s/admin/exports/history", addr)
 		log.Printf("Demo UI: http://%s/", addr)
 		if err := srv.Serve(addr); err != nil {
 			log.Fatalf("server error: %v", err)
