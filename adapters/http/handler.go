@@ -26,11 +26,19 @@ func (h *Handler) RegisterRoutes(router any) {
 	case interface{ Handle(string, http.Handler) }:
 		r.Handle(h.basePath(), h)
 		r.Handle(h.basePath()+"/", h)
+		if history := h.historyPath(); history != "" {
+			r.Handle(history, h)
+			r.Handle(history+"/", h)
+		}
 	case interface {
 		HandleFunc(string, func(http.ResponseWriter, *http.Request))
 	}:
 		r.HandleFunc(h.basePath(), h.ServeHTTP)
 		r.HandleFunc(h.basePath()+"/", h.ServeHTTP)
+		if history := h.historyPath(); history != "" {
+			r.HandleFunc(history, h.ServeHTTP)
+			r.HandleFunc(history+"/", h.ServeHTTP)
+		}
 	}
 }
 
@@ -53,6 +61,17 @@ func (h *Handler) basePath() string {
 	path := h.controller.BasePath()
 	if path == "" {
 		return "/admin/exports"
+	}
+	return path
+}
+
+func (h *Handler) historyPath() string {
+	if h == nil || h.controller == nil {
+		return "/admin/exports/history"
+	}
+	path := h.controller.HistoryPath()
+	if path == "" {
+		return "/admin/exports/history"
 	}
 	return path
 }
