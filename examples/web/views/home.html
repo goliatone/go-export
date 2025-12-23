@@ -279,6 +279,7 @@
         <h2>API Reference</h2>
         <div class="api-docs">
             <p><code>POST /admin/exports</code> - Request a new export</p>
+            <p><code>GET /admin/exports?definition=users</code> - Request export via querystring</p>
             <pre>{
   "definition": "users",
   "format": "csv",
@@ -292,7 +293,7 @@
   "estimated_rows": 10,
   "delivery": "auto"
 }</pre>
-            <p><code>GET /admin/exports</code> - List export history</p>
+            <p><code>GET /admin/exports/history</code> - List export history</p>
             <p><code>GET /admin/exports/:id</code> - Get export status</p>
             <p><code>GET /admin/exports/:id/download</code> - Download artifact</p>
             <p><code>DELETE /admin/exports/:id</code> - Delete/cancel export</p>
@@ -483,7 +484,7 @@
             fetch(`/admin/exports/${exportId}`)
                 .then(response => response.json())
                 .then(record => {
-                    if (record.State === 'completed') {
+                    if (record.state === 'completed') {
                         statusEl.className = 'status success';
                         statusEl.textContent = `Export ready! Downloading ${exportId}...`;
                         btn.disabled = false;
@@ -491,14 +492,14 @@
                         loadHistory();
                         return;
                     }
-                    if (record.State === 'failed' || record.State === 'canceled') {
+                    if (record.state === 'failed' || record.state === 'canceled') {
                         statusEl.className = 'status error';
-                        statusEl.textContent = `Export ${record.State}.`;
+                        statusEl.textContent = `Export ${record.state}.`;
                         btn.disabled = false;
                         return;
                     }
                     statusEl.className = 'status loading';
-                    statusEl.textContent = `Export ${record.State}...`;
+                    statusEl.textContent = `Export ${record.state}...`;
                     setTimeout(() => pollExport(exportId, attempt + 1), 1000);
                 })
                 .catch(error => {
@@ -512,7 +513,7 @@
             const container = document.getElementById('historyContainer');
             container.innerHTML = '<div class="empty-state">Loading...</div>';
 
-            fetch('/admin/exports')
+            fetch('/admin/exports/history')
                 .then(response => response.json())
                 .then(data => {
                     const exportsList = Array.isArray(data) ? data : (data.exports || []);
@@ -537,16 +538,16 @@
                             <tbody>
                                 ${exportsList.map(exp => `
                                     <tr>
-                                        <td><code>${exp.ID.slice(0, 8)}...</code></td>
-                                        <td>${exp.Definition}</td>
-                                        <td>${exp.Format}</td>
-                                        <td><span class="badge badge-${exp.State}">${exp.State}</span></td>
-                                        <td>${exp.Counts?.Processed || 0}</td>
-                                        <td>${new Date(exp.CreatedAt).toLocaleString()}</td>
+                                        <td><code>${exp.id.slice(0, 8)}...</code></td>
+                                        <td>${exp.definition}</td>
+                                        <td>${exp.format}</td>
+                                        <td><span class="badge badge-${exp.state}">${exp.state}</span></td>
+                                        <td>${exp.counts?.processed || 0}</td>
+                                        <td>${new Date(exp.created_at).toLocaleString()}</td>
                                         <td class="actions">
-                                            ${exp.State === 'completed' ? `<button onclick="downloadExport('${exp.ID}')">Download</button>` : ''}
-                                            ${exp.State === 'completed' && exp.Format === 'template' ? `<button class="btn-preview" onclick="previewExport('${exp.ID}')">Preview</button>` : ''}
-                                            <button class="btn-secondary" onclick="deleteExport('${exp.ID}')">Delete</button>
+                                            ${exp.state === 'completed' ? `<button onclick="downloadExport('${exp.id}')">Download</button>` : ''}
+                                            ${exp.state === 'completed' && exp.format === 'template' ? `<button class="btn-preview" onclick="previewExport('${exp.id}')">Preview</button>` : ''}
+                                            <button class="btn-secondary" onclick="deleteExport('${exp.id}')">Delete</button>
                                         </td>
                                     </tr>
                                 `).join('')}
