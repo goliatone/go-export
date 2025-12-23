@@ -67,6 +67,7 @@ func (f SelectionPolicyFunc) DefaultSelection(ctx context.Context, actor Actor, 
 // ExportRequest captures an export request.
 type ExportRequest struct {
 	Definition        string
+	Resource          string
 	SourceVariant     string
 	Format            Format
 	Query             any
@@ -155,9 +156,9 @@ type Schema struct {
 
 // ExportCounts tracks row counts.
 type ExportCounts struct {
-	Processed int64
-	Total     int64
-	Errors    int64
+	Processed int64 `json:"processed,omitempty"`
+	Total     int64 `json:"total,omitempty"`
+	Errors    int64 `json:"errors,omitempty"`
 }
 
 // ExportState captures progress states.
@@ -175,45 +176,45 @@ const (
 
 // ExportRecord captures tracker state for an export.
 type ExportRecord struct {
-	ID           string
-	Definition   string
-	Format       Format
-	State        ExportState
-	RequestedBy  Actor
-	Scope        Scope
+	ID           string        `json:"id"`
+	Definition   string        `json:"definition"`
+	Format       Format        `json:"format"`
+	State        ExportState   `json:"state"`
+	RequestedBy  Actor         `json:"requested_by"`
+	Scope        Scope         `json:"scope"`
 	Request      ExportRequest `json:"-"`
-	Counts       ExportCounts
-	BytesWritten int64
-	Artifact     ArtifactRef
-	CreatedAt    time.Time
-	StartedAt    time.Time
-	CompletedAt  time.Time
-	ExpiresAt    time.Time
+	Counts       ExportCounts  `json:"counts"`
+	BytesWritten int64         `json:"bytes_written,omitempty"`
+	Artifact     ArtifactRef   `json:"artifact"`
+	CreatedAt    time.Time     `json:"created_at"`
+	StartedAt    time.Time     `json:"started_at,omitempty"`
+	CompletedAt  time.Time     `json:"completed_at,omitempty"`
+	ExpiresAt    time.Time     `json:"expires_at,omitempty"`
 }
 
 // Actor identifies the requesting principal.
 type Actor struct {
-	ID      string
-	Scope   Scope
-	Roles   []string
-	Details map[string]any
+	ID      string         `json:"id"`
+	Scope   Scope          `json:"scope"`
+	Roles   []string       `json:"roles,omitempty"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // Scope identifies tenant/workspace scope.
 type Scope struct {
-	TenantID    string
-	WorkspaceID string
+	TenantID    string `json:"tenant_id,omitempty"`
+	WorkspaceID string `json:"workspace_id,omitempty"`
 }
 
 // ExportResult captures a completed export.
 type ExportResult struct {
-	ID       string
-	Delivery DeliveryMode
-	Format   Format
-	Rows     int64
-	Bytes    int64
-	Filename string
-	Artifact *ArtifactRef
+	ID       string       `json:"id"`
+	Delivery DeliveryMode `json:"delivery"`
+	Format   Format       `json:"format"`
+	Rows     int64        `json:"rows"`
+	Bytes    int64        `json:"bytes"`
+	Filename string       `json:"filename"`
+	Artifact *ArtifactRef `json:"artifact,omitempty"`
 }
 
 // Row is a column-aligned record.
@@ -355,17 +356,17 @@ type RenderOptions struct {
 
 // ArtifactMeta captures stored artifact metadata.
 type ArtifactMeta struct {
-	ContentType string
-	Size        int64
-	Filename    string
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
+	ContentType string    `json:"content_type,omitempty"`
+	Size        int64     `json:"size,omitempty"`
+	Filename    string    `json:"filename,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	ExpiresAt   time.Time `json:"expires_at,omitempty"`
 }
 
 // ArtifactRef references a stored artifact.
 type ArtifactRef struct {
-	Key  string
-	Meta ArtifactMeta
+	Key  string       `json:"key"`
+	Meta ArtifactMeta `json:"meta"`
 }
 
 // ArtifactStore stores export artifacts.
