@@ -22,6 +22,7 @@ type ExportConfig struct {
 	CleanupOnStart bool
 	Template       TemplateConfig
 	PDF            PDFConfig
+	Notifications  NotificationConfig
 }
 
 // TemplateConfig holds template renderer settings.
@@ -51,6 +52,28 @@ type PDFConfig struct {
 	MarginRight          string
 	BaseURL              string
 	ExternalAssetsPolicy string
+}
+
+// NotificationConfig holds export-ready notification settings.
+type NotificationConfig struct {
+	Enabled    bool
+	Recipients []string
+	Channels   []string
+	SMTP       SMTPConfig
+}
+
+// SMTPConfig holds SMTP adapter settings for notifications.
+type SMTPConfig struct {
+	Host          string
+	Port          int
+	From          string
+	Username      string
+	Password      string
+	UseTLS        bool
+	UseStartTLS   bool
+	SkipTLSVerify bool
+	AuthDisabled  bool
+	PlainOnly     bool
 }
 
 // FeatureFlags toggles optional features.
@@ -95,6 +118,14 @@ func Defaults() Config {
 				MarginRight:          "",
 				BaseURL:              "",
 				ExternalAssetsPolicy: "",
+			},
+			Notifications: NotificationConfig{
+				Enabled:    false,
+				Recipients: nil,
+				Channels:   nil,
+				SMTP: SMTPConfig{
+					UseStartTLS: true,
+				},
 			},
 		},
 		Features: FeatureFlags{
