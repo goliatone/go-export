@@ -16,6 +16,7 @@ const (
 	KindNotFound   ErrorKind = "not_found"
 	KindTimeout    ErrorKind = "timeout"
 	KindCanceled   ErrorKind = "canceled"
+	KindExternal   ErrorKind = "external"
 	KindInternal   ErrorKind = "internal"
 	KindNotImpl    ErrorKind = "not_implemented"
 )
@@ -83,6 +84,8 @@ func AsGoError(err error) *errorslib.Error {
 		return errorslib.New(msg, errorslib.CategoryOperation).WithTextCode("timeout")
 	case KindCanceled:
 		return errorslib.New(msg, errorslib.CategoryOperation).WithTextCode("canceled")
+	case KindExternal:
+		return errorslib.New(msg, errorslib.CategoryExternal).WithTextCode("external")
 	case KindNotImpl:
 		return errorslib.New(msg, errorslib.CategoryOperation).WithTextCode("not_implemented")
 	default:
