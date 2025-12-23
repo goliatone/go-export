@@ -1,0 +1,26 @@
+FROM golang:1.24-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    ca-certificates \
+    fonts-dejavu \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV CHROME_BIN=/usr/bin/chromium
+ENV EXPORT_PDF_ENABLED=true
+ENV EXPORT_PDF_ENGINE=chromium
+ENV EXPORT_PDF_CHROMIUM_PATH=/usr/bin/chromium
+ENV EXPORT_PDF_CHROMIUM_ARGS=--no-sandbox,--disable-dev-shm-usage,--disable-gpu
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+EXPOSE 8080
+
+CMD ["go", "run", "./examples/web"]
