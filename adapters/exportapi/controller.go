@@ -356,7 +356,7 @@ func (c *Controller) handleSync(req Request, res Response, actor export.Actor, r
 
 	exportID := c.nextID()
 	filename := sanitizeFilename(resolved.Filename, resolved.Request.Format)
-	setDownloadHeaders(res, exportID, filename, contentTypeForFormat(resolved.Request.Format))
+	contentType := contentTypeForFormat(resolved.Request.Format)
 
 	runReq := resolved.Request
 	runReq.Delivery = export.DeliverySync
@@ -365,38 +365,41 @@ func (c *Controller) handleSync(req Request, res Response, actor export.Actor, r
 	run.IDGenerator = func() string { return exportID }
 	run.ActorProvider = staticActorProvider{actor: actor}
 
-	if writer, ok := res.Writer(); ok {
-		tracker := &trackingWriter{writer: writer}
-		runReq.Output = tracker
+	pr, pw := io.Pipe()
+	tracker := &trackingWriter{writer: pw}
+	runReq.Output = tracker
 
+	errCh := make(chan error, 1)
+	go func() {
 		_, err := run.Run(req.Context(), runReq)
-		if err != nil {
-			if !tracker.Written() {
-				clearDownloadHeaders(res)
-				WriteError(res, err)
-				return
-			}
-			c.logger.Errorf("sync export failed after write: %v", err)
-		}
+		_ = pw.CloseWithError(err)
+		errCh <- err
+	}()
+
+	streamErr := res.WriteStream(req.Context(), contentType, pr,
+		WithFilename(filename),
+		WithExportID(exportID),
+		WithMaxBufferBytes(c.maxBufferBytes),
+	)
+	if streamErr != nil {
+		_ = pr.Close()
+	}
+	runErr := <-errCh
+
+	if runErr != nil && !tracker.Written() {
+		WriteError(res, runErr)
 		return
 	}
-
-	buffer := newLimitedBuffer(c.maxBufferBytes)
-	runReq.Output = buffer
-
-	_, err := run.Run(req.Context(), runReq)
-	if err != nil {
-		if !buffer.Written() {
-			clearDownloadHeaders(res)
-			WriteError(res, err)
+	if streamErr != nil {
+		if tracker.Written() {
+			c.logger.Errorf("sync export stream failed: %v", streamErr)
 			return
 		}
-		c.logger.Errorf("sync export failed after buffer write: %v", err)
+		WriteError(res, streamErr)
+		return
 	}
-
-	res.WriteHeader(http.StatusOK)
-	if _, err := res.Write(buffer.Bytes()); err != nil {
-		c.logger.Errorf("sync export buffer write failed: %v", err)
+	if runErr != nil {
+		c.logger.Errorf("sync export failed after write: %v", runErr)
 	}
 }
 
@@ -440,6 +443,11 @@ func (c *Controller) handleStatus(req Request, res Response, exportID string) {
 	if err != nil {
 		WriteError(res, err)
 		return
+	}
+	if record.State == export.StateCompleted {
+		if info, metaErr := c.service.DownloadMetadata(req.Context(), actor, record.ID); metaErr == nil {
+			record.Artifact = info.Artifact
+		}
 	}
 	writeJSON(res, http.StatusOK, record)
 }
@@ -512,28 +520,19 @@ func (c *Controller) handleDownload(req Request, res Response, exportID string) 
 		}
 	}
 	filename = sanitizeFilename(filename, format)
-	setDownloadHeaders(res, info.ExportID, filename, contentType)
-	if meta.Size > 0 {
-		res.SetHeader("Content-Length", fmt.Sprintf("%d", meta.Size))
-	}
-
-	if writer, ok := res.Writer(); ok {
-		res.WriteHeader(http.StatusOK)
-		if _, err := io.Copy(writer, reader); err != nil {
-			c.logger.Errorf("download copy failed: %v", err)
+	tracked := &trackingReader{reader: reader}
+	streamErr := res.WriteStream(req.Context(), contentType, tracked,
+		WithFilename(filename),
+		WithExportID(info.ExportID),
+		WithContentLength(meta.Size),
+		WithMaxBufferBytes(c.maxBufferBytes),
+	)
+	if streamErr != nil {
+		if !tracked.ReadAny() {
+			WriteError(res, streamErr)
+			return
 		}
-		return
-	}
-
-	buffer := newLimitedBuffer(c.maxBufferBytes)
-	if _, err := io.Copy(buffer, reader); err != nil {
-		WriteError(res, err)
-		return
-	}
-
-	res.WriteHeader(http.StatusOK)
-	if _, err := res.Write(buffer.Bytes()); err != nil {
-		c.logger.Errorf("download buffer write failed: %v", err)
+		c.logger.Errorf("download stream failed: %v", streamErr)
 	}
 }
 
@@ -936,6 +935,36 @@ func (w *trackingWriter) Write(p []byte) (int, error) {
 
 func (w *trackingWriter) Written() bool {
 	return w.written
+}
+
+type trackingReader struct {
+	reader io.ReadCloser
+	read   bool
+}
+
+func (r *trackingReader) Read(p []byte) (int, error) {
+	if r == nil || r.reader == nil {
+		return 0, io.EOF
+	}
+	n, err := r.reader.Read(p)
+	if n > 0 {
+		r.read = true
+	}
+	return n, err
+}
+
+func (r *trackingReader) Close() error {
+	if r == nil || r.reader == nil {
+		return nil
+	}
+	return r.reader.Close()
+}
+
+func (r *trackingReader) ReadAny() bool {
+	if r == nil {
+		return false
+	}
+	return r.read
 }
 
 type staticActorProvider struct {
