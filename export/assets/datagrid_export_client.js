@@ -28,17 +28,18 @@ export function buildDatagridExportRequest(grid, options = {}) {
     throw new Error('datagrid is required');
   }
   const definition = String(options.definition || '').trim();
-  if (!definition) {
-    throw new Error('definition is required');
+  const resource = String(options.resource || '').trim();
+  if (!definition && !resource) {
+    throw new Error('definition or resource is required');
   }
 
   const format = normalizeFormat(options.format || 'csv');
+  const sourceVariant = String(options.sourceVariant || options.source_variant || '').trim();
   const selection = buildSelection(grid, options);
   const columns = buildVisibleColumns(grid, options);
   const query = buildQuery(grid, options);
 
-  return {
-    definition,
+  const payload = {
     format,
     query,
     selection,
@@ -47,6 +48,10 @@ export function buildDatagridExportRequest(grid, options = {}) {
     estimated_rows: options.estimatedRows || 0,
     estimated_bytes: options.estimatedBytes || 0
   };
+  if (definition) payload.definition = definition;
+  if (resource) payload.resource = resource;
+  if (sourceVariant) payload.source_variant = sourceVariant;
+  return payload;
 }
 
 export function buildDatagridQuery(grid) {
