@@ -3,11 +3,14 @@ package exportrouter
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/goliatone/go-export/adapters/exportapi"
+	"github.com/goliatone/go-export/export"
 	"github.com/goliatone/go-router"
 )
 
@@ -137,4 +140,123 @@ func (res routerResponse) Redirect(location string, status int) error {
 		return nil
 	}
 	return res.ctx.Redirect(location, status)
+}
+
+func (res routerResponse) WriteDownload(ctx context.Context, payload exportapi.DownloadPayload) error {
+	if payload.Reader == nil && payload.Bytes == nil {
+		return nil
+	}
+	reader := payload.Reader
+	size := payload.Size
+	if reader == nil && payload.Bytes != nil {
+		reader = bytes.NewReader(payload.Bytes)
+		if size == 0 {
+			size = int64(len(payload.Bytes))
+		}
+	}
+	opts := []exportapi.StreamOption{
+		exportapi.WithFilename(payload.Filename),
+		exportapi.WithExportID(payload.ExportID),
+		exportapi.WithContentLength(size),
+		exportapi.WithMaxBufferBytes(payload.MaxBufferBytes),
+	}
+	return res.WriteStream(ctx, payload.ContentType, reader, opts...)
+}
+
+func (res routerResponse) WriteStream(ctx context.Context, contentType string, r io.Reader, opts ...exportapi.StreamOption) error {
+	_ = ctx
+	if res.ctx == nil {
+		return nil
+	}
+	if r == nil {
+		return nil
+	}
+	options := exportapi.ResolveStreamOptions(opts...)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if httpCtx, ok := router.AsHTTPContext(res.ctx); ok && httpCtx.Response() != nil {
+		return res.writeStreamToWriter(httpCtx.Response(), contentType, r, options)
+	}
+	data, err := readAllWithLimit(r, options.MaxBufferBytes)
+	if err != nil {
+		closeIfPossible(r)
+		return err
+	}
+	res.applyDownloadHeaders(contentType, options)
+	res.ctx.Status(http.StatusOK)
+	return res.ctx.Send(data)
+}
+
+func (res routerResponse) writeStreamToWriter(w io.Writer, contentType string, r io.Reader, opts exportapi.StreamOptions) error {
+	if w == nil {
+		return nil
+	}
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			res.applyDownloadHeaders(contentType, opts)
+			res.ctx.Status(http.StatusOK)
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			if err == io.EOF {
+				return nil
+			}
+			_, err = io.Copy(w, r)
+			return err
+		}
+		if err != nil {
+			if err == io.EOF {
+				res.applyDownloadHeaders(contentType, opts)
+				res.ctx.Status(http.StatusOK)
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+func (res routerResponse) applyDownloadHeaders(contentType string, opts exportapi.StreamOptions) {
+	if res.ctx == nil {
+		return
+	}
+	res.ctx.SetHeader("Content-Type", contentType)
+	if opts.Filename != "" {
+		res.ctx.SetHeader("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", opts.Filename))
+	}
+	if opts.ExportID != "" {
+		res.ctx.SetHeader("X-Export-Id", opts.ExportID)
+	}
+	if opts.ContentLength > 0 {
+		res.ctx.SetHeader("Content-Length", fmt.Sprintf("%d", opts.ContentLength))
+	}
+}
+
+func readAllWithLimit(r io.Reader, maxSize int64) ([]byte, error) {
+	if r == nil {
+		return nil, nil
+	}
+	if maxSize <= 0 {
+		maxSize = exportapi.DefaultMaxBufferBytes
+	}
+	limited := io.LimitReader(r, maxSize+1)
+	buf := &bytes.Buffer{}
+	if _, err := io.Copy(buf, limited); err != nil {
+		return nil, err
+	}
+	if int64(buf.Len()) > maxSize {
+		return nil, export.NewError(export.KindInternal, "buffer limit exceeded", nil)
+	}
+	return buf.Bytes(), nil
+}
+
+func closeIfPossible(r io.Reader) {
+	if r == nil {
+		return
+	}
+	if closer, ok := r.(io.Closer); ok {
+		_ = closer.Close()
+	}
 }
