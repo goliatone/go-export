@@ -80,6 +80,41 @@ Then load it in your template:
 <script type="module" src="/assets/datagrid_export_client.js"></script>
 ```
 
+### HTTP API Contract
+Default base path is `/admin/exports` (configurable on the handler).
+
+Endpoints:
+- `POST /admin/exports` creates an export (sync stream or async record).
+- `GET /admin/exports?definition=users&format=csv` runs a querystring export.
+- `GET /admin/exports/history` lists export history.
+- `GET /admin/exports/{id}` returns status + artifact metadata when available.
+- `GET /admin/exports/{id}/download` streams or redirects to the artifact.
+- `DELETE /admin/exports/{id}` deletes an export artifact.
+
+Request payload (JSON). Provide `definition` or `resource` (definition takes precedence):
+```json
+{
+  "definition": "users",
+  "source_variant": "inactive",
+  "format": "csv",
+  "query": {
+    "filters": [{"field": "status", "op": "eq", "value": "inactive"}],
+    "sort": [{"field": "email", "desc": false}]
+  },
+  "selection": {"mode": "all"},
+  "columns": ["id", "email"],
+  "delivery": "auto",
+  "locale": "en-US",
+  "timezone": "UTC",
+  "idempotency_key": "req-123"
+}
+```
+
+Response behavior:
+- Sync responses stream the file with `Content-Disposition: attachment` and `X-Export-Id`.
+- Async responses return `202` with `{id, status_url, download_url}`.
+- `GET /admin/exports/{id}` returns an `ExportRecord` (includes `artifact` metadata when available).
+
 ### Row Sources
 Row sources stream rows in the schema column order:
 - `sources/crud`: go-crud datagrid queries with stable ordering + scope injection.
