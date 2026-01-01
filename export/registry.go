@@ -2,6 +2,7 @@ package export
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -80,6 +81,38 @@ func (r *DefinitionRegistry) Resolve(req ExportRequest) (ResolvedDefinition, err
 	}
 
 	return resolved, nil
+}
+
+// Get returns a definition by name.
+func (r *DefinitionRegistry) Get(name string) (ExportDefinition, bool) {
+	if r == nil {
+		return ExportDefinition{}, false
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ExportDefinition{}, false
+	}
+	r.mu.RLock()
+	def, ok := r.defs[name]
+	r.mu.RUnlock()
+	return def, ok
+}
+
+// List returns all registered definitions in name order.
+func (r *DefinitionRegistry) List() []ExportDefinition {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defs := make([]ExportDefinition, 0, len(r.defs))
+	for _, def := range r.defs {
+		defs = append(defs, def)
+	}
+	r.mu.RUnlock()
+	sort.Slice(defs, func(i, j int) bool {
+		return defs[i].Name < defs[j].Name
+	})
+	return defs
 }
 
 // ResolveByResource finds a definition by resource name.
