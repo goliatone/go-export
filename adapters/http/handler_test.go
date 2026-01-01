@@ -207,6 +207,59 @@ func TestHandler_AsyncIdempotencyAndDownload(t *testing.T) {
 	}
 }
 
+func TestHandler_StatusIncludesArtifactMetadata(t *testing.T) {
+	tracker := export.NewMemoryTracker()
+	store := export.NewMemoryStore()
+	svc := export.NewService(export.ServiceConfig{
+		Tracker: tracker,
+		Store:   store,
+	})
+
+	ref, err := store.Put(context.Background(), "exports/exp-meta.csv", bytes.NewBufferString("id,name\n1,alice\n"), export.ArtifactMeta{
+		Filename:    "users.csv",
+		ContentType: "text/csv",
+	})
+	if err != nil {
+		t.Fatalf("store put: %v", err)
+	}
+	if _, err := tracker.Start(context.Background(), export.ExportRecord{
+		ID:         "exp-meta",
+		Definition: "users",
+		Format:     export.FormatCSV,
+		State:      export.StateCompleted,
+		Artifact:   export.ArtifactRef{Key: ref.Key},
+	}); err != nil {
+		t.Fatalf("tracker start: %v", err)
+	}
+
+	handler := NewHandler(Config{
+		Service:       svc,
+		Store:         store,
+		ActorProvider: StaticActorProvider{Actor: export.Actor{ID: "user-1"}},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/exports/exp-meta", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var record export.ExportRecord
+	if err := json.NewDecoder(rec.Body).Decode(&record); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if record.Artifact.Meta.Filename != "users.csv" {
+		t.Fatalf("expected filename users.csv, got %q", record.Artifact.Meta.Filename)
+	}
+	if record.Artifact.Meta.ContentType != "text/csv" {
+		t.Fatalf("expected content type text/csv, got %q", record.Artifact.Meta.ContentType)
+	}
+	if record.Artifact.Meta.Size == 0 {
+		t.Fatalf("expected size to be set")
+	}
+}
+
 func TestHandler_DownloadGuardRejects(t *testing.T) {
 	runner := newTestRunner(t)
 	tracker := export.NewMemoryTracker()
