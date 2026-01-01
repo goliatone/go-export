@@ -1,8 +1,10 @@
 package exporthttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -123,6 +125,88 @@ func (res httpResponse) Redirect(location string, status int) error {
 	res.w.Header().Set("Location", location)
 	res.w.WriteHeader(status)
 	return nil
+}
+
+func (res httpResponse) WriteDownload(ctx context.Context, payload exportapi.DownloadPayload) error {
+	if payload.Reader == nil && payload.Bytes == nil {
+		return nil
+	}
+	reader := payload.Reader
+	size := payload.Size
+	if reader == nil && payload.Bytes != nil {
+		reader = bytes.NewReader(payload.Bytes)
+		if size == 0 {
+			size = int64(len(payload.Bytes))
+		}
+	}
+	opts := []exportapi.StreamOption{
+		exportapi.WithFilename(payload.Filename),
+		exportapi.WithExportID(payload.ExportID),
+		exportapi.WithContentLength(size),
+		exportapi.WithMaxBufferBytes(payload.MaxBufferBytes),
+	}
+	return res.WriteStream(ctx, payload.ContentType, reader, opts...)
+}
+
+func (res httpResponse) WriteStream(ctx context.Context, contentType string, r io.Reader, opts ...exportapi.StreamOption) error {
+	_ = ctx
+	if res.w == nil {
+		return nil
+	}
+	if r == nil {
+		return nil
+	}
+	options := exportapi.ResolveStreamOptions(opts...)
+	return writeHTTPStream(res.w, contentType, r, options)
+}
+
+func writeHTTPStream(w http.ResponseWriter, contentType string, r io.Reader, opts exportapi.StreamOptions) error {
+	if w == nil {
+		return nil
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			applyDownloadHeaders(w, contentType, opts)
+			w.WriteHeader(http.StatusOK)
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			if err == io.EOF {
+				return nil
+			}
+			_, err = io.Copy(w, r)
+			return err
+		}
+		if err != nil {
+			if err == io.EOF {
+				applyDownloadHeaders(w, contentType, opts)
+				w.WriteHeader(http.StatusOK)
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+func applyDownloadHeaders(w http.ResponseWriter, contentType string, opts exportapi.StreamOptions) {
+	if w == nil {
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	if opts.Filename != "" {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", opts.Filename))
+	}
+	if opts.ExportID != "" {
+		w.Header().Set("X-Export-Id", opts.ExportID)
+	}
+	if opts.ContentLength > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", opts.ContentLength))
+	}
 }
 
 var _ exportapi.Response = httpResponse{}
