@@ -1,5 +1,27 @@
 # Changelog
 
+# [0.2.0](https://github.com/goliatone/go-export/compare/v0.1.0...v0.2.0) - (2026-01-01)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.2.0 ([67510c7](https://github.com/goliatone/go-export/commit/67510c757bdd3ab4c30ae3d9e5498abd7dfea8f0))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Meta for download request and sream info ([6683e27](https://github.com/goliatone/go-export/commit/6683e2778cffa1300ee3e595c8b3a2a5babec87c))  - (goliatone)
+- Proper stream for downloader ([ea8eadc](https://github.com/goliatone/go-export/commit/ea8eadc67c1e60e1b42fd34ba6a133e15c3534d3))  - (goliatone)
+- Get and List methods to registry ([17ab259](https://github.com/goliatone/go-export/commit/17ab259bfc393c794467c05e78a31f78bcdba3bd))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.1.0 ([0d55655](https://github.com/goliatone/go-export/commit/0d55655ac077f2389039c7aa238c98f933a12e91))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update readme ([28f2314](https://github.com/goliatone/go-export/commit/28f23142bd969bc122c04833de7268728fcc934a))  - (goliatone)
+- Udpate client ([d97f5f0](https://github.com/goliatone/go-export/commit/d97f5f0a03c48479cf03dd58612750d403a59680))  - (goliatone)
+- Update tests ([fd044c9](https://github.com/goliatone/go-export/commit/fd044c9561b75a9ea903da01dc5866f5f0a48c4f))  - (goliatone)
+
 # [0.1.0](https://github.com/goliatone/go-export/tree/v0.1.0) - (2025-12-23)
 
 ## <!-- 1 -->🐛 Bug Fixes
