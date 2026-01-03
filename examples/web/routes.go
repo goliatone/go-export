@@ -29,6 +29,19 @@ func (a *App) SetupRoutes(r router.Router[*fiber.App]) {
 	})
 	exportHandler.RegisterRoutes(r)
 
+	// Inbox API + realtime stream
+	wsConfig := router.DefaultWebSocketConfig()
+	wsConfig.OnPreUpgrade = func(c router.Context) (router.UpgradeData, error) {
+		return router.UpgradeData{
+			"user_id": a.inboxUserID(c),
+		}, nil
+	}
+	r.WebSocket("/ws/inbox", wsConfig, a.InboxSocket())
+	r.Get("/api/inbox", a.ListInbox)
+	r.Get("/api/inbox/badge", a.InboxBadge)
+	r.Patch("/api/inbox/read", a.InboxMarkRead)
+	r.Delete("/api/inbox/:id", a.InboxDismiss)
+
 	// API for available definitions
 	r.Get("/api/definitions", a.ListDefinitions)
 }
