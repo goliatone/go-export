@@ -184,86 +184,202 @@
         .api-docs code {
             color: #60a5fa;
         }
+        /* Inbox Widget */
         .inbox-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 1rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .inbox-header h2 {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
         .inbox-controls {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            flex-wrap: wrap;
+            gap: 0.75rem;
         }
         .inbox-badge {
             background: #2563eb;
             color: white;
             border-radius: 999px;
-            padding: 0.15rem 0.6rem;
-            font-size: 0.75rem;
+            padding: 0.2rem 0.6rem;
+            font-size: 0.7rem;
             font-weight: 600;
-            min-width: 28px;
+            min-width: 24px;
             text-align: center;
+            line-height: 1.2;
+        }
+        .inbox-badge:empty,
+        .inbox-badge[data-count="0"] {
+            background: #9ca3af;
         }
         .inbox-status {
             display: inline-flex;
             align-items: center;
-            gap: 0.35rem;
+            gap: 0.4rem;
             font-size: 0.75rem;
             color: #6b7280;
+            padding: 0.25rem 0.6rem;
+            background: #f3f4f6;
+            border-radius: 999px;
         }
         .inbox-status::before {
             content: "";
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             border-radius: 999px;
             background: #9ca3af;
+            flex-shrink: 0;
+        }
+        .inbox-status.connected {
+            background: #ecfdf5;
+            color: #065f46;
         }
         .inbox-status.connected::before {
             background: #10b981;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+        }
+        .inbox-status.disconnected {
+            background: #fffbeb;
+            color: #92400e;
         }
         .inbox-status.disconnected::before {
             background: #f59e0b;
         }
-        .inbox-item {
-            border-bottom: 1px solid #e5e7eb;
-            padding: 0.75rem 0;
+        .inbox-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
         }
-        .inbox-item:last-child {
-            border-bottom: none;
+        .inbox-item {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 1rem;
+            transition: all 0.15s ease;
+        }
+        .inbox-item:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .inbox-item.unread {
             background: #eff6ff;
-            border-radius: 6px;
-            padding: 0.75rem;
+            border-color: #bfdbfe;
+            border-left: 3px solid #2563eb;
+        }
+        .inbox-item-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
         }
         .inbox-title {
             font-weight: 600;
             color: #111827;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        .inbox-item.unread .inbox-title::before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #2563eb;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+        .inbox-status-badge {
+            font-size: 0.7rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            flex-shrink: 0;
+        }
+        .inbox-status-badge.unread {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .inbox-status-badge.read {
+            background: #f3f4f6;
+            color: #6b7280;
         }
         .inbox-body {
             color: #4b5563;
-            margin: 0.35rem 0;
-            white-space: pre-line;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            margin-bottom: 0.75rem;
         }
-        .inbox-meta {
-            color: #6b7280;
-            font-size: 0.75rem;
+        .inbox-body:empty {
+            display: none;
+        }
+        .inbox-footer {
             display: flex;
-            gap: 0.75rem;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
             flex-wrap: wrap;
         }
-        .inbox-actions {
-            margin-top: 0.5rem;
+        .inbox-meta {
+            color: #9ca3af;
+            font-size: 0.75rem;
             display: flex;
+            align-items: center;
             gap: 0.5rem;
+        }
+        .inbox-meta svg {
+            width: 14px;
+            height: 14px;
+            opacity: 0.7;
+        }
+        .inbox-actions {
+            display: flex;
+            gap: 0.4rem;
             flex-wrap: wrap;
         }
         .inbox-actions button,
         .inbox-actions a {
             font-size: 0.75rem;
-            padding: 0.25rem 0.5rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .inbox-actions .btn-link {
+            background: transparent;
+            color: #6b7280;
+            border: 1px solid #e5e7eb;
+        }
+        .inbox-actions .btn-link:hover {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .inbox-actions .btn-action {
+            background: #2563eb;
+            color: white;
+        }
+        .inbox-actions .btn-action:hover {
+            background: #1d4ed8;
+        }
+        .inbox-actions .btn-dismiss {
+            background: transparent;
+            color: #9ca3af;
+            border: none;
+            padding: 0.3rem;
+        }
+        .inbox-actions .btn-dismiss:hover {
+            color: #ef4444;
         }
     </style>
 </head>
@@ -350,14 +466,17 @@
 
     <div class="card">
         <div class="inbox-header">
-            <h2>Inbox</h2>
+            <h2>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+                Notifications
+                <span id="inboxBadge" class="inbox-badge">0</span>
+            </h2>
             <div class="inbox-controls">
                 <span id="inboxStatus" class="inbox-status disconnected">Offline</span>
-                <span id="inboxBadge" class="inbox-badge">0</span>
                 <button class="btn-secondary" onclick="loadInbox()">Refresh</button>
             </div>
         </div>
-        <div id="inboxContainer">
+        <div id="inboxContainer" class="inbox-list">
             <div class="empty-state">No notifications yet</div>
         </div>
     </div>
@@ -752,22 +871,30 @@
                     const html = items.map(item => {
                         const title = escapeHTML(item.title || 'Notification');
                         const body = formatInboxBody(item.body || '');
-                        const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : '';
-                        const status = item.unread ? 'Unread' : 'Read';
+                        const createdAt = item.created_at ? formatRelativeTime(item.created_at) : '';
                         const actionURL = item.action_url ? escapeHTML(item.action_url) : '';
-                        const actionLabel = item.metadata && item.metadata.cta_label ? escapeHTML(item.metadata.cta_label) : 'Open';
+                        const actionLabel = item.metadata && item.metadata.cta_label ? escapeHTML(item.metadata.cta_label) : 'View';
                         return `
                             <div class="inbox-item ${item.unread ? 'unread' : ''}">
-                                <div class="inbox-title">${title}</div>
-                                <div class="inbox-body">${body}</div>
-                                <div class="inbox-meta">
-                                    <span>${createdAt}</span>
-                                    <span>${status}</span>
+                                <div class="inbox-item-header">
+                                    <div class="inbox-title">${title}</div>
+                                    <span class="inbox-status-badge ${item.unread ? 'unread' : 'read'}">${item.unread ? 'New' : 'Read'}</span>
                                 </div>
-                                <div class="inbox-actions">
-                                    <button onclick="toggleInboxRead('${item.id}', ${item.unread})">${item.unread ? 'Mark read' : 'Mark unread'}</button>
-                                    <button class="btn-secondary" onclick="dismissInbox('${item.id}')">Dismiss</button>
-                                    ${actionURL ? `<a class="btn-preview" href="${actionURL}" target="_blank" rel="noopener noreferrer">${actionLabel}</a>` : ''}
+                                <div class="inbox-body">${body}</div>
+                                <div class="inbox-footer">
+                                    <div class="inbox-meta">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                        <span>${createdAt}</span>
+                                    </div>
+                                    <div class="inbox-actions">
+                                        <button class="btn-link" onclick="toggleInboxRead('${item.id}', ${item.unread})">
+                                            ${item.unread ? 'Mark read' : 'Mark unread'}
+                                        </button>
+                                        ${actionURL ? `<a class="btn-action" href="${actionURL}" target="_blank" rel="noopener noreferrer">${actionLabel}</a>` : ''}
+                                        <button class="btn-dismiss" onclick="dismissInbox('${item.id}')" title="Dismiss">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -777,6 +904,22 @@
                 .catch(error => {
                     container.innerHTML = `<div class="empty-state">${error.message}</div>`;
                 });
+        }
+
+        function formatRelativeTime(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSec = Math.floor(diffMs / 1000);
+            const diffMin = Math.floor(diffSec / 60);
+            const diffHour = Math.floor(diffMin / 60);
+            const diffDay = Math.floor(diffHour / 24);
+
+            if (diffSec < 60) return 'Just now';
+            if (diffMin < 60) return `${diffMin}m ago`;
+            if (diffHour < 24) return `${diffHour}h ago`;
+            if (diffDay < 7) return `${diffDay}d ago`;
+            return date.toLocaleDateString();
         }
 
         function toggleInboxRead(id, unread) {
