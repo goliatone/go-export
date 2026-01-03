@@ -147,7 +147,8 @@ function dev:serve {
     export EXPORT_PDF_ENABLED="true";
     export EXPORT_PDF_ENGINE="chromium";
     export EXPORT_NOTIFY_ENABLED="true";
-    export EXPORT_NOTIFY_RECIPIENTS="admin@example.com";
+    export EXPORT_NOTIFY_RECIPIENTS="demo-user"
+    export EXPORT_NOTIFY_CHANNELS="email,inbox";
     export EXPORT_NOTIFY_SMTP_HOST="localhost";
     export EXPORT_NOTIFY_SMTP_PORT="1025";
     export EXPORT_NOTIFY_SMTP_FROM="no-reply@example.com";
