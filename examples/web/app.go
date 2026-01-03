@@ -25,6 +25,7 @@ import (
 	exportcallback "github.com/goliatone/go-export/sources/callback"
 	exportcrud "github.com/goliatone/go-export/sources/crud"
 	gojob "github.com/goliatone/go-job"
+	"github.com/goliatone/go-notifications/pkg/inbox"
 )
 
 // App holds the application dependencies.
@@ -39,6 +40,8 @@ type App struct {
 	Scheduler      *exportjob.Scheduler
 	GenerateTask   *exportjob.GenerateTask
 	CancelRegistry *exportjob.CancelRegistry
+	Inbox          *inbox.Service
+	InboxHub       *inboxHub
 	subscriptions  []dispatcher.Subscription
 }
 
@@ -103,16 +106,27 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		CancelHook:     cancelRegistry,
 	})
 	service := baseService
+	baseURL := buildServerBaseURL(cfg.Server)
+
+	if cfg.Export.Notifications.Enabled && len(cfg.Export.Notifications.Channels) == 0 {
+		cfg.Export.Notifications.Channels = []string{"email", "inbox"}
+	}
 
 	var notifier notify.ExportReadyNotifier
+	var inboxSvc *inbox.Service
+	var inboxHub *inboxHub
 	if cfg.Export.Notifications.Enabled {
-		setup, err := setupExportReadyNotifier(ctx, logger, cfg.Export.Notifications)
+		inboxHub = newInboxHub(logger)
+		setup, err := setupExportReadyNotifier(ctx, logger, cfg.Export.Notifications, inboxHub)
 		if err != nil {
 			return nil, fmt.Errorf("failed to setup notifications: %w", err)
 		}
-		notifier = setup
+		notifier = setup.Notifier
+		inboxSvc = setup.Inbox
+		if inboxHub != nil && inboxSvc != nil {
+			inboxHub.SetInbox(inboxSvc)
+		}
 		if notifier != nil {
-			baseURL := buildServerBaseURL(cfg.Server)
 			service = newNotifyingService(service, store, notifier, cfg.Export.Notifications, logger, baseURL)
 		}
 	}
@@ -160,12 +174,20 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 
 	var delivery *exportdelivery.Service
 	if notifier != nil {
+		normalizedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 		delivery = exportdelivery.NewService(exportdelivery.Config{
 			Service:     baseService,
 			Store:       store,
 			EmailSender: logEmailSender{logger: logger},
 			Logger:      logger,
 			Notifier:    notifier,
+			LinkBuilder: func(exportID string, ref export.ArtifactRef) string {
+				_ = ref
+				if normalizedBaseURL == "" || exportID == "" {
+					return ""
+				}
+				return fmt.Sprintf("%s/admin/exports/%s/download", normalizedBaseURL, exportID)
+			},
 		})
 	}
 
@@ -180,6 +202,8 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		Scheduler:      scheduler,
 		GenerateTask:   generateTask,
 		CancelRegistry: cancelRegistry,
+		Inbox:          inboxSvc,
+		InboxHub:       inboxHub,
 		subscriptions:  subscriptions,
 	}
 
