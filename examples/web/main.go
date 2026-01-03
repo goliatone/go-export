@@ -254,7 +254,7 @@ func fiberAppInitializer(engine fiber.Views) func(*fiber.App) *fiber.App {
 		}))
 		fiberApp.Use(cors.New(cors.Config{
 			AllowOrigins: "*",
-			AllowMethods: "GET,POST,DELETE,OPTIONS",
+			AllowMethods: "GET,POST,DELETE,PATCH,OPTIONS",
 			AllowHeaders: "Content-Type,Authorization,X-Idempotency-Key",
 		}))
 
