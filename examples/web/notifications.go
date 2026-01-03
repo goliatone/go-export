@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"strings"
@@ -17,10 +18,12 @@ import (
 	"github.com/goliatone/go-notifications/pkg/adapters/console"
 	notifsmtp "github.com/goliatone/go-notifications/pkg/adapters/smtp"
 	notifconfig "github.com/goliatone/go-notifications/pkg/config"
+	"github.com/goliatone/go-notifications/pkg/domain"
 	"github.com/goliatone/go-notifications/pkg/inbox"
 	"github.com/goliatone/go-notifications/pkg/interfaces/broadcaster"
 	"github.com/goliatone/go-notifications/pkg/interfaces/cache"
 	notiflogger "github.com/goliatone/go-notifications/pkg/interfaces/logger"
+	"github.com/goliatone/go-notifications/pkg/interfaces/store"
 	"github.com/goliatone/go-notifications/pkg/notifier"
 	"github.com/goliatone/go-notifications/pkg/onready"
 	"github.com/goliatone/go-notifications/pkg/storage"
@@ -30,9 +33,14 @@ import (
 const notifyLinkTTL = 30 * time.Minute
 const defaultNotifyFrom = "no-reply@example.com"
 
-func setupExportReadyNotifier(ctx context.Context, logger *SimpleLogger, cfg config.NotificationConfig) (notify.ExportReadyNotifier, error) {
+type notificationSetup struct {
+	Notifier notify.ExportReadyNotifier
+	Inbox    *inbox.Service
+}
+
+func setupExportReadyNotifier(ctx context.Context, logger *SimpleLogger, cfg config.NotificationConfig, realTime broadcaster.Broadcaster) (notificationSetup, error) {
 	if !cfg.Enabled {
-		return nil, nil
+		return notificationSetup{}, nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -42,7 +50,7 @@ func setupExportReadyNotifier(ctx context.Context, logger *SimpleLogger, cfg con
 	store := i18n.NewStaticStore(onready.Translations())
 	translator, err := i18n.NewSimpleTranslator(store, i18n.WithTranslatorDefaultLocale("en"))
 	if err != nil {
-		return nil, err
+		return notificationSetup{}, err
 	}
 
 	providers := storage.NewMemoryProviders()
@@ -56,16 +64,20 @@ func setupExportReadyNotifier(ctx context.Context, logger *SimpleLogger, cfg con
 		DefaultLocale: "en",
 	})
 	if err != nil {
-		return nil, err
+		return notificationSetup{}, err
 	}
 
+	inboxBroadcaster := realTime
+	if inboxBroadcaster == nil {
+		inboxBroadcaster = &broadcaster.Nop{}
+	}
 	inboxSvc, err := inbox.New(inbox.Dependencies{
 		Repository:  providers.Inbox,
-		Broadcaster: &broadcaster.Nop{},
+		Broadcaster: inboxBroadcaster,
 		Logger:      logSink,
 	})
 	if err != nil {
-		return nil, err
+		return notificationSetup{}, err
 	}
 
 	regResult, err := onready.Register(ctx, onready.Dependencies{
@@ -73,7 +85,11 @@ func setupExportReadyNotifier(ctx context.Context, logger *SimpleLogger, cfg con
 		Templates:   tplSvc,
 	}, onready.Options{})
 	if err != nil {
-		return nil, err
+		return notificationSetup{}, err
+	}
+
+	if err := ensureInboxAssets(ctx, providers.Definitions, tplSvc, regResult); err != nil {
+		return notificationSetup{}, err
 	}
 
 	registry := adapters.NewRegistry(buildNotificationAdapters(logSink, cfg)...)
@@ -91,15 +107,18 @@ func setupExportReadyNotifier(ctx context.Context, logger *SimpleLogger, cfg con
 		Inbox: inboxSvc,
 	})
 	if err != nil {
-		return nil, err
+		return notificationSetup{}, err
 	}
 
 	ready, err := onready.NewNotifier(manager, regResult.DefinitionCode)
 	if err != nil {
-		return nil, err
+		return notificationSetup{}, err
 	}
 
-	return gonotifications.NewNotifier(ready), nil
+	return notificationSetup{
+		Notifier: gonotifications.NewNotifier(ready),
+		Inbox:    inboxSvc,
+	}, nil
 }
 
 func logNotificationConfig(logger *SimpleLogger, cfg config.NotificationConfig) {
@@ -119,6 +138,116 @@ func logNotificationConfig(logger *SimpleLogger, cfg config.NotificationConfig) 
 		cfg.SMTP.AuthDisabled,
 		cfg.SMTP.PlainOnly,
 	)
+}
+
+func ensureInboxAssets(ctx context.Context, defs store.NotificationDefinitionRepository, tplSvc *templates.Service, reg onready.Result) error {
+	if defs == nil || tplSvc == nil {
+		return nil
+	}
+	def, err := defs.GetByCode(ctx, reg.DefinitionCode)
+	if err != nil {
+		return err
+	}
+	if def == nil {
+		return errors.New("notifications: missing definition for inbox")
+	}
+	inboxCode := strings.TrimSpace(reg.DefinitionCode) + ".inbox"
+	if strings.TrimSpace(inboxCode) == "" {
+		return errors.New("notifications: invalid inbox template code")
+	}
+
+	baseTpl, err := tplSvc.Get(ctx, reg.InAppCode, "in-app", "en")
+	if err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		baseTpl = findInAppTemplate(onready.Templates())
+	}
+	if baseTpl == nil {
+		return errors.New("notifications: missing in-app template for inbox")
+	}
+	if err := upsertInboxTemplate(ctx, tplSvc, inboxCode, baseTpl); err != nil {
+		return err
+	}
+
+	updated := false
+	if next, changed := appendUniqueString(def.Channels, "inbox"); changed {
+		def.Channels = next
+		updated = true
+	}
+	templateKey := "inbox:" + inboxCode
+	if next, changed := appendUniqueString(def.TemplateKeys, templateKey); changed {
+		def.TemplateKeys = next
+		updated = true
+	}
+	if !updated {
+		return nil
+	}
+	return defs.Update(ctx, def)
+}
+
+func upsertInboxTemplate(ctx context.Context, tplSvc *templates.Service, code string, base *domain.NotificationTemplate) error {
+	if tplSvc == nil || base == nil {
+		return nil
+	}
+	locale := strings.TrimSpace(base.Locale)
+	if locale == "" {
+		locale = "en"
+	}
+	input := templates.TemplateInput{
+		Code:        code,
+		Channel:     "inbox",
+		Locale:      locale,
+		Subject:     base.Subject,
+		Body:        base.Body,
+		Description: "Inbox template for export-ready notifications",
+		Format:      base.Format,
+		Schema:      base.Schema,
+		Metadata:    cloneJSONMap(base.Metadata),
+	}
+	if _, err := tplSvc.Get(ctx, code, "inbox", locale); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			_, err = tplSvc.Create(ctx, input)
+			return err
+		}
+		return err
+	}
+	_, err := tplSvc.Update(ctx, input)
+	return err
+}
+
+func findInAppTemplate(tpls []domain.NotificationTemplate) *domain.NotificationTemplate {
+	for _, tpl := range tpls {
+		if strings.EqualFold(tpl.Channel, "in-app") {
+			copyTpl := tpl
+			return &copyTpl
+		}
+	}
+	return nil
+}
+
+func appendUniqueString(values []string, value string) ([]string, bool) {
+	candidate := strings.TrimSpace(value)
+	if candidate == "" {
+		return values, false
+	}
+	for _, entry := range values {
+		if strings.EqualFold(strings.TrimSpace(entry), candidate) {
+			return values, false
+		}
+	}
+	return append(values, candidate), true
+}
+
+func cloneJSONMap(src domain.JSONMap) domain.JSONMap {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(domain.JSONMap, len(src))
+	for key, value := range src {
+		out[key] = value
+	}
+	return out
 }
 
 type notifyingService struct {
@@ -198,7 +327,9 @@ func (s *notifyingService) notifyFromResult(ctx context.Context, actor export.Ac
 	if s == nil || s.notifier == nil || s.store == nil {
 		return
 	}
-	if len(s.cfg.Recipients) == 0 {
+	recipients := s.resolveRecipients(actor)
+	if len(recipients) == 0 {
+		s.logNotifySkip("export ready notification skipped: missing recipients")
 		return
 	}
 	if result.Artifact == nil || result.Artifact.Key == "" {
@@ -208,14 +339,16 @@ func (s *notifyingService) notifyFromResult(ctx context.Context, actor export.Ac
 	if req.Format == "" {
 		req.Format = result.Format
 	}
-	s.sendNotification(ctx, actor, req, *result.Artifact, result.Filename, result.Rows, exportID)
+	s.sendNotification(ctx, actor, recipients, req, *result.Artifact, result.Filename, result.Rows, exportID)
 }
 
 func (s *notifyingService) notifyFromRecord(ctx context.Context, actor export.Actor, record export.ExportRecord, req export.ExportRequest) {
 	if s == nil || s.notifier == nil || s.store == nil {
 		return
 	}
-	if len(s.cfg.Recipients) == 0 {
+	recipients := s.resolveRecipients(actor)
+	if len(recipients) == 0 {
+		s.logNotifySkip("export ready notification skipped: missing recipients")
 		return
 	}
 	if req.Definition == "" {
@@ -235,10 +368,10 @@ func (s *notifyingService) notifyFromRecord(ctx context.Context, actor export.Ac
 		s.logNotifySkip("export ready notification skipped: no artifact metadata")
 		return
 	}
-	s.sendNotification(ctx, actor, req, ref, record.Artifact.Meta.Filename, record.Counts.Processed, record.ID)
+	s.sendNotification(ctx, actor, recipients, req, ref, record.Artifact.Meta.Filename, record.Counts.Processed, record.ID)
 }
 
-func (s *notifyingService) sendNotification(ctx context.Context, actor export.Actor, req export.ExportRequest, ref export.ArtifactRef, fallbackFilename string, rows int64, exportID string) {
+func (s *notifyingService) sendNotification(ctx context.Context, actor export.Actor, recipients []string, req export.ExportRequest, ref export.ArtifactRef, fallbackFilename string, rows int64, exportID string) {
 	link := s.resolveDownloadLink(ctx, ref.Key, exportID)
 	if link == "" {
 		s.logNotifySkip("export ready notification skipped: missing download link")
@@ -257,22 +390,48 @@ func (s *notifyingService) sendNotification(ctx context.Context, actor export.Ac
 		format = export.FormatCSV
 	}
 	filename := resolveNotifyFilename(ref.Meta, fallbackFilename, req.Definition, format)
+	formatLabel := string(export.NormalizeFormat(format))
+	expiresLabel := expiresAt.UTC().Format(time.RFC3339)
+	rowCount := notifyRows(rows)
 
 	evt := notify.ExportReadyEvent{
-		Recipients: s.cfg.Recipients,
+		Recipients: recipients,
 		Channels:   notifyChannels(s.cfg.Channels),
 		Locale:     req.Locale,
 		TenantID:   actor.Scope.TenantID,
 		ActorID:    actor.ID,
 		FileName:   filename,
-		Format:     string(export.NormalizeFormat(format)),
+		Format:     formatLabel,
 		URL:        link,
-		ExpiresAt:  expiresAt.UTC().Format(time.RFC3339),
-		Rows:       notifyRows(rows),
+		ExpiresAt:  expiresLabel,
+		Rows:       rowCount,
+	}
+	htmlBody := buildExportReadyHTML(filename, formatLabel, link, expiresLabel, rowCount)
+	textBody := buildExportReadyText(filename, formatLabel, link, expiresLabel, rowCount)
+	if htmlBody != "" || textBody != "" {
+		evt.ChannelOverrides = map[string]map[string]any{
+			"email": {
+				"html_body": htmlBody,
+				"text_body": textBody,
+			},
+		}
 	}
 	if err := s.notifier.Send(ctx, evt); err != nil {
 		s.logNotifySkip(fmt.Sprintf("export ready notification failed: %v", err))
 	}
+}
+
+func (s *notifyingService) resolveRecipients(actor export.Actor) []string {
+	if s == nil {
+		return nil
+	}
+	if len(s.cfg.Recipients) > 0 {
+		return s.cfg.Recipients
+	}
+	if strings.TrimSpace(actor.ID) == "" {
+		return nil
+	}
+	return []string{strings.TrimSpace(actor.ID)}
 }
 
 func (s *notifyingService) resolveDownloadLink(ctx context.Context, key, exportID string) string {
@@ -303,7 +462,7 @@ func (s *notifyingService) logNotifySkip(message string) {
 
 func notifyChannels(channels []string) []string {
 	if len(channels) == 0 {
-		return []string{"email"}
+		return []string{"email", "inbox"}
 	}
 	return channels
 }
@@ -332,6 +491,55 @@ func resolveNotifyFilename(meta export.ArtifactMeta, resultFilename, definition 
 		ext = string(export.FormatCSV)
 	}
 	return fmt.Sprintf("%s.%s", base, ext)
+}
+
+func buildExportReadyHTML(filename, format, url, expires string, rows int) string {
+	if filename == "" && url == "" && expires == "" && rows == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("<p>")
+	sb.WriteString(fmt.Sprintf(
+		"Your export &quot;%s&quot; (%s) is ready to download.",
+		html.EscapeString(filename),
+		html.EscapeString(format),
+	))
+	sb.WriteString("</p>")
+	if url != "" {
+		sb.WriteString(fmt.Sprintf(
+			"<p><a href=\"%s\">Download</a></p>",
+			html.EscapeString(url),
+		))
+	}
+	if expires != "" {
+		sb.WriteString(fmt.Sprintf(
+			"<p>Link expires at %s</p>",
+			html.EscapeString(expires),
+		))
+	}
+	if rows > 0 {
+		sb.WriteString(fmt.Sprintf("<p>Rows: %d</p>", rows))
+	}
+	return sb.String()
+}
+
+func buildExportReadyText(filename, format, url, expires string, rows int) string {
+	if filename == "" && url == "" && expires == "" && rows == 0 {
+		return ""
+	}
+	lines := []string{
+		fmt.Sprintf("Your export %q (%s) is ready to download.", filename, format),
+	}
+	if url != "" {
+		lines = append(lines, "Download: "+url)
+	}
+	if expires != "" {
+		lines = append(lines, "Link expires at "+expires)
+	}
+	if rows > 0 {
+		lines = append(lines, fmt.Sprintf("Rows: %d", rows))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func buildNotificationAdapters(logSink notiflogger.Logger, cfg config.NotificationConfig) []adapters.Messenger {
