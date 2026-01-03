@@ -38,6 +38,7 @@ type Config struct {
 	Limits         Limits
 	Notifier       notify.ExportReadyNotifier
 	NotifyFailHard bool
+	LinkBuilder    func(exportID string, ref export.ArtifactRef) string
 }
 
 // Service orchestrates scheduled export generation + delivery.
@@ -51,6 +52,7 @@ type Service struct {
 	limits         Limits
 	notifier       notify.ExportReadyNotifier
 	notifyFailHard bool
+	linkBuilder    func(exportID string, ref export.ArtifactRef) string
 	now            func() time.Time
 }
 
@@ -86,6 +88,7 @@ func NewService(cfg Config) *Service {
 		limits:         limits,
 		notifier:       cfg.Notifier,
 		notifyFailHard: cfg.NotifyFailHard,
+		linkBuilder:    cfg.LinkBuilder,
 		now:            time.Now,
 	}
 }
@@ -133,14 +136,19 @@ func (s *Service) Deliver(ctx context.Context, req Request) (Result, error) {
 
 	link := ""
 	if mode == DeliveryLink || notifyRequested {
-		link, err = s.signedURL(ctx, ref, req.LinkTTL)
-		if err != nil {
-			if mode == DeliveryLink || s.notifyFailHard {
-				return Result{}, err
-			}
-			notifyRequested = false
-			if s.logger != nil {
-				s.logger.Errorf("export ready notification skipped: signed URL failed: %v", err)
+		if s.linkBuilder != nil {
+			link = strings.TrimSpace(s.linkBuilder(record.ID, ref))
+		}
+		if link == "" {
+			link, err = s.signedURL(ctx, ref, req.LinkTTL)
+			if err != nil {
+				if mode == DeliveryLink || s.notifyFailHard {
+					return Result{}, err
+				}
+				notifyRequested = false
+				if s.logger != nil {
+					s.logger.Errorf("export ready notification skipped: signed URL failed: %v", err)
+				}
 			}
 		}
 	}
