@@ -184,6 +184,87 @@
         .api-docs code {
             color: #60a5fa;
         }
+        .inbox-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .inbox-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .inbox-badge {
+            background: #2563eb;
+            color: white;
+            border-radius: 999px;
+            padding: 0.15rem 0.6rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            min-width: 28px;
+            text-align: center;
+        }
+        .inbox-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+        .inbox-status::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #9ca3af;
+        }
+        .inbox-status.connected::before {
+            background: #10b981;
+        }
+        .inbox-status.disconnected::before {
+            background: #f59e0b;
+        }
+        .inbox-item {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0.75rem 0;
+        }
+        .inbox-item:last-child {
+            border-bottom: none;
+        }
+        .inbox-item.unread {
+            background: #eff6ff;
+            border-radius: 6px;
+            padding: 0.75rem;
+        }
+        .inbox-title {
+            font-weight: 600;
+            color: #111827;
+        }
+        .inbox-body {
+            color: #4b5563;
+            margin: 0.35rem 0;
+            white-space: pre-line;
+        }
+        .inbox-meta {
+            color: #6b7280;
+            font-size: 0.75rem;
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .inbox-actions {
+            margin-top: 0.5rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .inbox-actions button,
+        .inbox-actions a {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -268,6 +349,20 @@
     </div>
 
     <div class="card">
+        <div class="inbox-header">
+            <h2>Inbox</h2>
+            <div class="inbox-controls">
+                <span id="inboxStatus" class="inbox-status disconnected">Offline</span>
+                <span id="inboxBadge" class="inbox-badge">0</span>
+                <button class="btn-secondary" onclick="loadInbox()">Refresh</button>
+            </div>
+        </div>
+        <div id="inboxContainer">
+            <div class="empty-state">No notifications yet</div>
+        </div>
+    </div>
+
+    <div class="card">
         <h2>Export History</h2>
         <button class="btn-secondary" onclick="loadHistory()" style="margin-bottom: 1rem;">Refresh</button>
         <div id="historyContainer">
@@ -297,6 +392,11 @@
             <p><code>GET /admin/exports/:id</code> - Get export status</p>
             <p><code>GET /admin/exports/:id/download</code> - Download artifact</p>
             <p><code>DELETE /admin/exports/:id</code> - Delete/cancel export</p>
+            <p><code>GET /api/inbox</code> - List inbox notifications</p>
+            <p><code>GET /api/inbox/badge</code> - Unread inbox count</p>
+            <p><code>PATCH /api/inbox/read</code> - Mark inbox items read/unread</p>
+            <p><code>DELETE /api/inbox/:id</code> - Dismiss inbox item</p>
+            <p><code>GET /ws/inbox</code> - WebSocket inbox stream</p>
             <p><code>GET /api/definitions</code> - List available definitions</p>
         </div>
     </div>
@@ -584,9 +684,214 @@
                 });
         }
 
+        let inboxSocket = null;
+        let inboxReconnectTimer = null;
+        let inboxRefreshTimer = null;
+
+        function setInboxStatus(connected) {
+            const statusEl = document.getElementById('inboxStatus');
+            if (!statusEl) {
+                return;
+            }
+            if (connected) {
+                statusEl.textContent = 'Live';
+                statusEl.classList.add('connected');
+                statusEl.classList.remove('disconnected');
+            } else {
+                statusEl.textContent = 'Offline';
+                statusEl.classList.add('disconnected');
+                statusEl.classList.remove('connected');
+            }
+        }
+
+        function updateInboxBadge(count) {
+            const badgeEl = document.getElementById('inboxBadge');
+            if (!badgeEl) {
+                return;
+            }
+            const value = Number.isFinite(count) ? count : 0;
+            badgeEl.textContent = value;
+        }
+
+        function loadInboxBadge() {
+            fetch('/api/inbox/badge')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Inbox disabled');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    updateInboxBadge(data.unread || 0);
+                })
+                .catch(() => {
+                    updateInboxBadge(0);
+                });
+        }
+
+        function loadInbox() {
+            const container = document.getElementById('inboxContainer');
+            if (!container) {
+                return;
+            }
+            container.innerHTML = '<div class="empty-state">Loading...</div>';
+
+            fetch('/api/inbox')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Inbox disabled');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const items = Array.isArray(data) ? data : (data.items || data.inbox || []);
+                    if (!items.length) {
+                        container.innerHTML = '<div class="empty-state">No notifications yet</div>';
+                        return;
+                    }
+                    const html = items.map(item => {
+                        const title = escapeHTML(item.title || 'Notification');
+                        const body = formatInboxBody(item.body || '');
+                        const createdAt = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+                        const status = item.unread ? 'Unread' : 'Read';
+                        const actionURL = item.action_url ? escapeHTML(item.action_url) : '';
+                        const actionLabel = item.metadata && item.metadata.cta_label ? escapeHTML(item.metadata.cta_label) : 'Open';
+                        return `
+                            <div class="inbox-item ${item.unread ? 'unread' : ''}">
+                                <div class="inbox-title">${title}</div>
+                                <div class="inbox-body">${body}</div>
+                                <div class="inbox-meta">
+                                    <span>${createdAt}</span>
+                                    <span>${status}</span>
+                                </div>
+                                <div class="inbox-actions">
+                                    <button onclick="toggleInboxRead('${item.id}', ${item.unread})">${item.unread ? 'Mark read' : 'Mark unread'}</button>
+                                    <button class="btn-secondary" onclick="dismissInbox('${item.id}')">Dismiss</button>
+                                    ${actionURL ? `<a class="btn-preview" href="${actionURL}" target="_blank" rel="noopener noreferrer">${actionLabel}</a>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    container.innerHTML = html;
+                })
+                .catch(error => {
+                    container.innerHTML = `<div class="empty-state">${error.message}</div>`;
+                });
+        }
+
+        function toggleInboxRead(id, unread) {
+            fetch('/api/inbox/read', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    ids: [id],
+                    read: !!unread,
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.error || 'Update failed'); });
+                }
+                refreshInboxSoon();
+            })
+            .catch(error => {
+                alert(`Update failed: ${error.message}`);
+            });
+        }
+
+        function dismissInbox(id) {
+            fetch(`/api/inbox/${id}`, { method: 'DELETE' })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.error || 'Dismiss failed'); });
+                    }
+                    refreshInboxSoon();
+                })
+                .catch(error => {
+                    alert(`Dismiss failed: ${error.message}`);
+                });
+        }
+
+        function refreshInboxSoon() {
+            if (inboxRefreshTimer) {
+                clearTimeout(inboxRefreshTimer);
+            }
+            inboxRefreshTimer = setTimeout(() => {
+                loadInbox();
+                loadInboxBadge();
+            }, 250);
+        }
+
+        function connectInboxSocket() {
+            if (inboxSocket) {
+                inboxSocket.close();
+            }
+            const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            inboxSocket = new WebSocket(`${scheme}://${window.location.host}/ws/inbox`);
+
+            inboxSocket.onopen = function() {
+                setInboxStatus(true);
+            };
+
+            inboxSocket.onclose = function() {
+                setInboxStatus(false);
+                if (inboxReconnectTimer) {
+                    return;
+                }
+                inboxReconnectTimer = setTimeout(() => {
+                    inboxReconnectTimer = null;
+                    connectInboxSocket();
+                }, 2000);
+            };
+
+            inboxSocket.onerror = function() {
+                inboxSocket.close();
+            };
+
+            inboxSocket.onmessage = function(event) {
+                let msg = null;
+                try {
+                    msg = JSON.parse(event.data);
+                } catch (err) {
+                    return;
+                }
+                if (!msg || !msg.topic) {
+                    return;
+                }
+                if (msg.badge !== undefined && msg.badge !== null) {
+                    updateInboxBadge(msg.badge);
+                }
+                if (msg.topic === 'inbox.badge') {
+                    return;
+                }
+                if (msg.topic.startsWith('inbox.')) {
+                    refreshInboxSoon();
+                }
+            };
+        }
+
+        function escapeHTML(value) {
+            return (value || '')
+                .toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function formatInboxBody(text) {
+            return escapeHTML(text).replace(/\n/g, '<br>');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             updateColumns();
             loadHistory();
+            loadInbox();
+            loadInboxBadge();
+            connectInboxSocket();
         });
     </script>
 </body>
