@@ -3,6 +3,7 @@ package exportdelivery
 import (
 	"context"
 	"fmt"
+	"html"
 	"strings"
 	"time"
 
@@ -65,21 +66,31 @@ func (s *Service) notify(ctx context.Context, req Request, record export.ExportR
 		now = s.now()
 	}
 
+	filename := resolveNotifyFilename(ref.Meta, result.Filename, req.Export.Definition, req.Export.Format)
+	format := resolveNotifyFormat(req.Export.Format, result.Format)
+	expiresAt := deriveExpiresAt(ref.Meta, ttl, now)
+	rows := notifyRowCount(result.Rows)
+	channelOverrides := ensureNotifyEmailOverrides(
+		req.Notify.ChannelOverrides,
+		buildNotifyHTML(filename, format, link, expiresAt, rows, req.Notify.Message),
+		buildNotifyText(filename, format, link, expiresAt, rows, req.Notify.Message),
+	)
+
 	evt := notify.ExportReadyEvent{
 		Recipients:       req.Notify.Recipients,
 		Channels:         normalizeNotifyChannels(req.Notify.Channels),
 		Locale:           req.Export.Locale,
 		TenantID:         req.Actor.Scope.TenantID,
 		ActorID:          req.Actor.ID,
-		FileName:         resolveNotifyFilename(ref.Meta, result.Filename, req.Export.Definition, req.Export.Format),
-		Format:           resolveNotifyFormat(req.Export.Format, result.Format),
+		FileName:         filename,
+		Format:           format,
 		URL:              link,
-		ExpiresAt:        deriveExpiresAt(ref.Meta, ttl, now),
-		Rows:             notifyRowCount(result.Rows),
+		ExpiresAt:        expiresAt,
+		Rows:             rows,
 		Parts:            req.Notify.Parts,
 		ManifestURL:      req.Notify.ManifestURL,
 		Message:          req.Notify.Message,
-		ChannelOverrides: req.Notify.ChannelOverrides,
+		ChannelOverrides: channelOverrides,
 		Attachments:      resolveNotifyAttachments(req.Notify, attachment, s.limits.MaxAttachmentSize, s.logger),
 	}
 	return s.notifier.Send(ctx, evt)
@@ -134,6 +145,89 @@ func notifyRowCount(rows int64) int {
 		return 0
 	}
 	return int(rows)
+}
+
+func ensureNotifyEmailOverrides(overrides map[string]map[string]any, htmlBody, textBody string) map[string]map[string]any {
+	if htmlBody == "" && textBody == "" {
+		return overrides
+	}
+	if overrides == nil {
+		overrides = make(map[string]map[string]any)
+	}
+	emailOverrides := overrides["email"]
+	if emailOverrides == nil {
+		emailOverrides = make(map[string]any)
+		overrides["email"] = emailOverrides
+	}
+	if htmlBody != "" {
+		if _, ok := emailOverrides["html_body"]; !ok {
+			emailOverrides["html_body"] = htmlBody
+		}
+	}
+	if textBody != "" {
+		if _, ok := emailOverrides["text_body"]; !ok {
+			emailOverrides["text_body"] = textBody
+		}
+	}
+	return overrides
+}
+
+func buildNotifyHTML(filename, format, url, expires string, rows int, note string) string {
+	if filename == "" && url == "" && expires == "" && rows == 0 && strings.TrimSpace(note) == "" {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("<p>")
+	sb.WriteString(fmt.Sprintf(
+		"Your export &quot;%s&quot; (%s) is ready to download.",
+		html.EscapeString(filename),
+		html.EscapeString(format),
+	))
+	sb.WriteString("</p>")
+	if url != "" {
+		sb.WriteString(fmt.Sprintf(
+			"<p><a href=\"%s\">Download</a></p>",
+			html.EscapeString(url),
+		))
+	}
+	if expires != "" {
+		sb.WriteString(fmt.Sprintf(
+			"<p>Link expires at %s</p>",
+			html.EscapeString(expires),
+		))
+	}
+	if rows > 0 {
+		sb.WriteString(fmt.Sprintf("<p>Rows: %d</p>", rows))
+	}
+	if strings.TrimSpace(note) != "" {
+		sb.WriteString(fmt.Sprintf(
+			"<p>Note: %s</p>",
+			html.EscapeString(note),
+		))
+	}
+	return sb.String()
+}
+
+func buildNotifyText(filename, format, url, expires string, rows int, note string) string {
+	if filename == "" && url == "" && expires == "" && rows == 0 && strings.TrimSpace(note) == "" {
+		return ""
+	}
+	lines := []string{
+		fmt.Sprintf("Your export %q (%s) is ready to download.", filename, format),
+	}
+	if url != "" {
+		lines = append(lines, "Download: "+url)
+	}
+	if expires != "" {
+		lines = append(lines, "Link expires at "+expires)
+	}
+	if rows > 0 {
+		lines = append(lines, fmt.Sprintf("Rows: %d", rows))
+	}
+	if strings.TrimSpace(note) != "" {
+		lines = append(lines, "", "Note: "+strings.TrimSpace(note))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func resolveNotifyAttachments(req NotificationRequest, attachment *Attachment, maxSize int64, logger export.Logger) []notify.NotificationAttachment {
