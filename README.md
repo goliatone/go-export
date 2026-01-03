@@ -8,6 +8,7 @@ go-export provides a streaming export engine with guard-first authorization, plu
 - Renderers for CSV, JSON/NDJSON, XLSX, plus optional templated outputs.
 - Sync downloads or async artifact generation with idempotency and retries.
 - Progress tracking, retention cleanup hooks, and observability events/metrics.
+- Optional go-notifications integration for export-ready email + inbox delivery with realtime updates.
 
 ## Package Layout
 ```
@@ -188,6 +189,19 @@ Hooks for audit and metrics:
 - `ChangeEmitter` emits lifecycle events.
 - `MetricsHook` emits counters for rows/bytes/duration/error kinds.
 - `adapters/activity` logs events to go-users ActivitySink.
+
+### Realtime Inbox (go-notifications)
+The example app wires `go-notifications` to deliver export-ready events into an inbox channel and broadcast realtime updates.
+
+Demo wiring highlights:
+- Enable notifications: `EXPORT_NOTIFY_ENABLED=true`.
+- For inbox-only, set `EXPORT_NOTIFY_CHANNELS=inbox` (default when enabled is `email,inbox`).
+- WebSocket stream: `ws://localhost:8080/ws/inbox` (topics: `inbox.created`, `inbox.updated`).
+- Inbox REST endpoints:
+  - `GET /api/inbox` (list)
+  - `GET /api/inbox/badge` (unread count)
+  - `PATCH /api/inbox/read` (mark read/unread)
+  - `DELETE /api/inbox/{id}` (dismiss)
 
 ## Documentation
 - Examples: `docs/EXAMPLES.md`
