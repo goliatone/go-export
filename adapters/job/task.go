@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/goliatone/go-command/dispatcher"
@@ -22,7 +23,10 @@ const (
 	DefaultGenerateTaskPath = "export:generate"
 )
 
-var backoffRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+var (
+	backoffRand   = rand.New(rand.NewSource(time.Now().UnixNano()))
+	backoffRandMu sync.Mutex
+)
 
 // Payload captures the job execution input.
 type Payload struct {
@@ -97,10 +101,10 @@ func NewGenerateTask(cfg TaskConfig) *GenerateTask {
 // GetID returns the task identifier.
 func (t *GenerateTask) GetID() string { return t.id }
 
-// GetHandler returns a handler for cron usage.
+// GetHandler returns a handler for non-queue execution paths.
 func (t *GenerateTask) GetHandler() func() error {
 	return func() error {
-		return t.Execute(context.Background(), &job.ExecutionMessage{})
+		return export.NewError(export.KindNotImpl, "queue payload required; use scheduler/worker execution", nil)
 	}
 }
 
@@ -361,7 +365,9 @@ func applyJitter(delay time.Duration, jitter bool) time.Duration {
 	}
 	// +/-50% jitter
 	half := float64(delay) * 0.5
+	backoffRandMu.Lock()
 	offset := (backoffRand.Float64()*2 - 1) * half
+	backoffRandMu.Unlock()
 	jittered := float64(delay) + offset
 	if jittered < 0 {
 		return 0
