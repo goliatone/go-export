@@ -9,11 +9,11 @@ require (
 	github.com/chromedp/chromedp v0.10.0
 	github.com/flosch/pongo2/v6 v6.0.0
 	github.com/gofiber/fiber/v2 v2.52.10
-	github.com/goliatone/go-command v0.10.0
+	github.com/goliatone/go-command v0.12.0
 	github.com/goliatone/go-errors v0.9.0
 	github.com/goliatone/go-i18n v0.2.0
-	github.com/goliatone/go-job v0.13.0
-	github.com/goliatone/go-notifications v0.7.0
+	github.com/goliatone/go-job v0.14.0
+	github.com/goliatone/go-notifications v0.10.0
 	github.com/goliatone/go-router v0.39.0
 	github.com/goliatone/go-users v0.3.0
 	github.com/google/uuid v1.6.0
