@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -674,44 +676,77 @@ func (l logEmailSender) Send(ctx context.Context, msg exportdelivery.EmailMessag
 }
 
 type notificationsLogger struct {
-	base *SimpleLogger
+	base   *SimpleLogger
+	fields map[string]any
 }
 
-func (l notificationsLogger) With(fields ...notiflogger.Field) notiflogger.Logger {
-	_ = fields
+func (l notificationsLogger) WithFields(fields map[string]any) notiflogger.Logger {
+	if len(fields) == 0 {
+		return l
+	}
+	next := notificationsLogger{base: l.base, fields: make(map[string]any, len(l.fields)+len(fields))}
+	for k, v := range l.fields {
+		next.fields[k] = v
+	}
+	for k, v := range fields {
+		next.fields[k] = v
+	}
+	return next
+}
+
+func (l notificationsLogger) WithContext(ctx context.Context) notiflogger.Logger {
+	_ = ctx
 	return l
 }
 
-func (l notificationsLogger) Debug(msg string, fields ...notiflogger.Field) {
-	l.log("DEBUG", msg, fields...)
+func (l notificationsLogger) Trace(msg string, args ...any) { l.log("TRACE", msg, args...) }
+func (l notificationsLogger) Debug(msg string, args ...any) { l.log("DEBUG", msg, args...) }
+func (l notificationsLogger) Info(msg string, args ...any)  { l.log("INFO", msg, args...) }
+func (l notificationsLogger) Warn(msg string, args ...any)  { l.log("WARN", msg, args...) }
+func (l notificationsLogger) Error(msg string, args ...any) { l.log("ERROR", msg, args...) }
+
+func (l notificationsLogger) Fatal(msg string, args ...any) {
+	l.log("FATAL", msg, args...)
+	os.Exit(1)
 }
 
-func (l notificationsLogger) Info(msg string, fields ...notiflogger.Field) {
-	l.log("INFO", msg, fields...)
-}
-
-func (l notificationsLogger) Warn(msg string, fields ...notiflogger.Field) {
-	l.log("WARN", msg, fields...)
-}
-
-func (l notificationsLogger) Error(msg string, fields ...notiflogger.Field) {
-	l.log("ERROR", msg, fields...)
-}
-
-func (l notificationsLogger) log(level, msg string, fields ...notiflogger.Field) {
+func (l notificationsLogger) log(level, msg string, args ...any) {
 	if l.base == nil {
 		return
 	}
-	l.base.Infof("[go-notifications][%s] %s%s", level, msg, formatNotifFields(fields))
+	allArgs := append(fieldArgs(l.fields), args...)
+	l.base.Infof("[go-notifications][%s] %s%s", level, msg, formatArgs(allArgs))
 }
 
-func formatNotifFields(fields []notiflogger.Field) string {
+func fieldArgs(fields map[string]any) []any {
 	if len(fields) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	args := make([]any, 0, len(keys)*2)
+	for _, k := range keys {
+		args = append(args, k, fields[k])
+	}
+	return args
+}
+
+func formatArgs(args []any) string {
+	if len(args) == 0 {
 		return ""
 	}
-	parts := make([]string, 0, len(fields))
-	for _, field := range fields {
-		parts = append(parts, fmt.Sprintf("%s=%v", field.Key, field.Value))
+	parts := make([]string, 0, len(args))
+	for i := 0; i < len(args); {
+		if key, ok := args[i].(string); ok && i+1 < len(args) {
+			parts = append(parts, fmt.Sprintf("%s=%v", key, args[i+1]))
+			i += 2
+			continue
+		}
+		parts = append(parts, fmt.Sprint(args[i]))
+		i++
 	}
 	return " " + strings.Join(parts, " ")
 }
