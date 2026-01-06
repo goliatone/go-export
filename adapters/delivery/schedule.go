@@ -11,12 +11,61 @@ import (
 	"github.com/goliatone/go-errors"
 )
 
+const scheduleModeEnv = "EXPORT_DELIVERY_SCHEDULE_MODE"
+
+// ScheduleMode determines how scheduled deliveries execute.
+type ScheduleMode string
+
+const (
+	ScheduleModeEnqueue     ScheduleMode = "enqueue"
+	ScheduleModeExecuteSync ScheduleMode = "execute_sync"
+)
+
 // ScheduleLoader loads scheduled delivery requests.
 type ScheduleLoader func(ctx context.Context) ([]Request, error)
 
 // ScheduleRequester enqueues scheduled delivery requests.
 type ScheduleRequester interface {
 	RequestDelivery(ctx context.Context, req Request) error
+}
+
+// ScheduleExecutor runs scheduled delivery requests synchronously.
+type ScheduleExecutor interface {
+	ExecuteDelivery(ctx context.Context, req Request) error
+}
+
+// ScheduleExecutorFunc adapts a function to a ScheduleExecutor.
+type ScheduleExecutorFunc func(ctx context.Context, req Request) error
+
+func (f ScheduleExecutorFunc) ExecuteDelivery(ctx context.Context, req Request) error {
+	if f == nil {
+		return errors.New("schedule executor is required", errors.CategoryInternal).
+			WithTextCode("SCHEDULE_EXECUTOR_NIL")
+	}
+	return f(ctx, req)
+}
+
+// NewTaskExecutor adapts a delivery task + builder to a ScheduleExecutor.
+func NewTaskExecutor(task *Task, builder *MessageBuilder) ScheduleExecutor {
+	return ScheduleExecutorFunc(func(ctx context.Context, req Request) error {
+		if task == nil {
+			return errors.New("schedule task is required", errors.CategoryValidation).
+				WithTextCode("SCHEDULE_TASK_REQUIRED")
+		}
+		if builder == nil {
+			return errors.New("schedule message builder is required", errors.CategoryValidation).
+				WithTextCode("SCHEDULE_BUILDER_REQUIRED")
+		}
+		msg, err := builder.Build(ctx, req)
+		if err != nil {
+			return err
+		}
+		if msg == nil {
+			return errors.New("schedule execution message is required", errors.CategoryValidation).
+				WithTextCode("EXECUTION_MESSAGE_REQUIRED")
+		}
+		return task.Execute(ctx, msg)
+	})
 }
 
 // ScheduleLimits bounds scheduled delivery execution.
@@ -28,10 +77,12 @@ type ScheduleLimits struct {
 // ScheduleCommand wires CLI/Cron execution for scheduled deliveries.
 type ScheduleCommand struct {
 	requester  ScheduleRequester
+	executor   ScheduleExecutor
 	loader     ScheduleLoader
 	cliConfig  gcmd.CLIConfig
 	cronConfig gcmd.HandlerConfig
 	limits     ScheduleLimits
+	mode       ScheduleMode
 	sleep      func(time.Duration)
 }
 
@@ -59,6 +110,20 @@ func WithScheduleLimits(limits ScheduleLimits) ScheduleOption {
 	}
 }
 
+// WithScheduleMode sets the schedule execution mode.
+func WithScheduleMode(mode ScheduleMode) ScheduleOption {
+	return func(cmd *ScheduleCommand) {
+		cmd.mode = mode
+	}
+}
+
+// WithScheduleExecutor sets the synchronous executor for scheduled deliveries.
+func WithScheduleExecutor(executor ScheduleExecutor) ScheduleOption {
+	return func(cmd *ScheduleCommand) {
+		cmd.executor = executor
+	}
+}
+
 // NewScheduledDeliveriesCommand creates a scheduled delivery CLI/Cron command.
 func NewScheduledDeliveriesCommand(requester ScheduleRequester, loader ScheduleLoader, opts ...ScheduleOption) *ScheduleCommand {
 	cmd := &ScheduleCommand{
@@ -83,7 +148,7 @@ func NewScheduledDeliveriesCommand(requester ScheduleRequester, loader ScheduleL
 // CronHandler executes scheduled deliveries.
 func (c *ScheduleCommand) CronHandler() func() error {
 	return func() error {
-		_, err := c.run(context.Background(), "")
+		_, err := c.run(context.Background(), "", "")
 		return err
 	}
 }
@@ -109,14 +174,33 @@ func (c *ScheduleCommand) CLIOptions() gcmd.CLIConfig {
 	return c.cliConfig
 }
 
-func (c *ScheduleCommand) run(ctx context.Context, from string) (int, error) {
+func (c *ScheduleCommand) run(ctx context.Context, from string, modeFlag string) (int, error) {
 	if c == nil {
 		return 0, errors.New("schedule command is nil", errors.CategoryInternal).
 			WithTextCode("SCHEDULE_CMD_NIL")
 	}
-	if c.requester == nil {
-		return 0, errors.New("schedule requester is required", errors.CategoryValidation).
-			WithTextCode("REQUESTER_REQUIRED")
+	mode, err := c.resolveMode(modeFlag)
+	if err != nil {
+		return 0, err
+	}
+
+	var execute func(context.Context, Request) error
+	switch mode {
+	case ScheduleModeEnqueue:
+		if c.requester == nil {
+			return 0, errors.New("schedule requester is required", errors.CategoryValidation).
+				WithTextCode("REQUESTER_REQUIRED")
+		}
+		execute = c.requester.RequestDelivery
+	case ScheduleModeExecuteSync:
+		if c.executor == nil {
+			return 0, errors.New("schedule executor is required", errors.CategoryValidation).
+				WithTextCode("EXECUTOR_REQUIRED")
+		}
+		execute = c.executor.ExecuteDelivery
+	default:
+		return 0, errors.New("schedule mode is invalid", errors.CategoryValidation).
+			WithTextCode("SCHEDULE_MODE_INVALID")
 	}
 
 	requests, err := c.loadRequests(ctx, from)
@@ -129,7 +213,7 @@ func (c *ScheduleCommand) run(ctx context.Context, from string) (int, error) {
 		if c.limits.MaxRequests > 0 && count >= c.limits.MaxRequests {
 			break
 		}
-		if err := c.requester.RequestDelivery(ctx, req); err != nil {
+		if err := execute(ctx, req); err != nil {
 			return count, err
 		}
 		count++
@@ -151,9 +235,71 @@ func (c *ScheduleCommand) loadRequests(ctx context.Context, from string) ([]Requ
 	return c.loader(ctx)
 }
 
+func (c *ScheduleCommand) resolveMode(flagMode string) (ScheduleMode, error) {
+	mode := ScheduleModeExecuteSync
+
+	if raw := strings.TrimSpace(os.Getenv(scheduleModeEnv)); raw != "" {
+		parsed, ok := parseScheduleMode(raw)
+		if !ok {
+			return "", invalidScheduleMode(raw)
+		}
+		mode = parsed
+	}
+
+	if raw := strings.TrimSpace(flagMode); raw != "" {
+		parsed, ok := parseScheduleMode(raw)
+		if !ok {
+			return "", invalidScheduleMode(raw)
+		}
+		mode = parsed
+	}
+
+	if c != nil && c.mode != "" {
+		if !isValidScheduleMode(c.mode) {
+			return "", invalidScheduleMode(string(c.mode))
+		}
+		mode = c.mode
+	}
+
+	return mode, nil
+}
+
+func invalidScheduleMode(value string) error {
+	return errors.New("schedule mode is invalid", errors.CategoryValidation).
+		WithTextCode("SCHEDULE_MODE_INVALID")
+}
+
+func parseScheduleMode(value string) (ScheduleMode, bool) {
+	switch normalizeScheduleMode(value) {
+	case string(ScheduleModeEnqueue):
+		return ScheduleModeEnqueue, true
+	case "sync", "execute", string(ScheduleModeExecuteSync):
+		return ScheduleModeExecuteSync, true
+	default:
+		return "", false
+	}
+}
+
+func isValidScheduleMode(value ScheduleMode) bool {
+	switch value {
+	case ScheduleModeEnqueue, ScheduleModeExecuteSync:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeScheduleMode(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	value = strings.ReplaceAll(value, "-", "_")
+	value = strings.ReplaceAll(value, " ", "_")
+	return value
+}
+
 type scheduleCLI struct {
 	cmd  *ScheduleCommand
 	From string `kong:"name='from',help='Path to JSON scheduled delivery requests'"`
+	Mode string `kong:"name='mode',help='Schedule mode (execute_sync|enqueue); env EXPORT_DELIVERY_SCHEDULE_MODE'"`
 }
 
 func (c *scheduleCLI) Run() error {
@@ -161,7 +307,7 @@ func (c *scheduleCLI) Run() error {
 		return errors.New("schedule command is required", errors.CategoryInternal).
 			WithTextCode("SCHEDULE_CMD_NIL")
 	}
-	_, err := c.cmd.run(context.Background(), c.From)
+	_, err := c.cmd.run(context.Background(), c.From, c.Mode)
 	return err
 }
 
