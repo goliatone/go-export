@@ -12,6 +12,9 @@ type DeliveryHandler interface {
 	Deliver(ctx context.Context, req Request) (Result, error)
 }
 
+// MessageBuilderFunc builds an execution message for non-queue paths.
+type MessageBuilderFunc func(ctx context.Context) (*job.ExecutionMessage, error)
+
 // TaskConfig configures the scheduled delivery task.
 type TaskConfig struct {
 	ID             string
@@ -19,6 +22,7 @@ type TaskConfig struct {
 	Config         job.Config
 	HandlerOptions job.HandlerOptions
 	Handler        DeliveryHandler
+	MessageBuilder MessageBuilderFunc
 	Logger         export.Logger
 }
 
@@ -29,6 +33,7 @@ type Task struct {
 	config         job.Config
 	handlerOptions job.HandlerOptions
 	handler        DeliveryHandler
+	messageBuilder MessageBuilderFunc
 	logger         export.Logger
 }
 
@@ -53,6 +58,7 @@ func NewTask(cfg TaskConfig) *Task {
 		config:         cfg.Config,
 		handlerOptions: cfg.HandlerOptions,
 		handler:        cfg.Handler,
+		messageBuilder: cfg.MessageBuilder,
 		logger:         logger,
 	}
 }
@@ -63,7 +69,22 @@ func (t *Task) GetID() string { return t.id }
 // GetHandler returns a handler for non-queue execution paths.
 func (t *Task) GetHandler() func() error {
 	return func() error {
-		return export.NewError(export.KindNotImpl, "queue payload required; use scheduler/worker execution", nil)
+		if t == nil {
+			return export.NewError(export.KindInternal, "delivery task is nil", nil)
+		}
+		if t.messageBuilder == nil {
+			return export.NewError(export.KindNotImpl, "delivery message builder not configured", nil)
+		}
+
+		ctx := context.Background()
+		msg, err := t.messageBuilder(ctx)
+		if err != nil {
+			return err
+		}
+		if msg == nil {
+			return export.NewError(export.KindValidation, "delivery execution message is required", nil)
+		}
+		return t.Execute(ctx, msg)
 	}
 }
 
