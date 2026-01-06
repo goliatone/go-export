@@ -26,9 +26,26 @@ type BatchRequester interface {
 	RequestExport(ctx context.Context, actor export.Actor, req export.ExportRequest) (export.ExportRecord, error)
 }
 
+// BatchExecutor runs batch exports synchronously.
+type BatchExecutor interface {
+	ExecuteExport(ctx context.Context, actor export.Actor, req export.ExportRequest) (export.ExportRecord, error)
+}
+
+// BatchExecutorFunc adapts a function to a BatchExecutor.
+type BatchExecutorFunc func(ctx context.Context, actor export.Actor, req export.ExportRequest) (export.ExportRecord, error)
+
+func (f BatchExecutorFunc) ExecuteExport(ctx context.Context, actor export.Actor, req export.ExportRequest) (export.ExportRecord, error) {
+	if f == nil {
+		return export.ExportRecord{}, errors.New("batch executor is required", errors.CategoryInternal).
+			WithTextCode("BATCH_EXECUTOR_NIL")
+	}
+	return f(ctx, actor, req)
+}
+
 // BatchCommand wires CLI/Cron execution for batch exports.
 type BatchCommand struct {
 	requester  BatchRequester
+	executor   BatchExecutor
 	loader     BatchLoader
 	cliConfig  gcmd.CLIConfig
 	cronConfig gcmd.HandlerConfig
@@ -63,6 +80,13 @@ func WithBatchCronConfig(cfg gcmd.HandlerConfig) BatchOption {
 func WithBatchLimits(limits BatchLimits) BatchOption {
 	return func(cmd *BatchCommand) {
 		cmd.limits = limits
+	}
+}
+
+// WithBatchExecutor sets the synchronous executor for batch exports.
+func WithBatchExecutor(executor BatchExecutor) BatchOption {
+	return func(cmd *BatchCommand) {
+		cmd.executor = executor
 	}
 }
 
@@ -142,8 +166,8 @@ func (c *BatchCommand) run(ctx context.Context, from string) (int, error) {
 		return 0, errors.New("batch command is nil", errors.CategoryInternal).
 			WithTextCode("BATCH_CMD_NIL")
 	}
-	if c.requester == nil {
-		return 0, errors.New("batch requester is required", errors.CategoryValidation).
+	if c.requester == nil && c.executor == nil {
+		return 0, errors.New("batch requester or executor is required", errors.CategoryValidation).
 			WithTextCode("REQUESTER_REQUIRED")
 	}
 
@@ -160,7 +184,11 @@ func (c *BatchCommand) run(ctx context.Context, from string) (int, error) {
 		req := item.Request
 		req.Delivery = export.DeliveryAsync
 		req.Output = nil
-		if _, err := c.requester.RequestExport(ctx, item.Actor, req); err != nil {
+		if c.executor != nil {
+			if _, err := c.executor.ExecuteExport(ctx, item.Actor, req); err != nil {
+				return count, err
+			}
+		} else if _, err := c.requester.RequestExport(ctx, item.Actor, req); err != nil {
 			return count, err
 		}
 		count++
