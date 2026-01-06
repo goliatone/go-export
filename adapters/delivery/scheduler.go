@@ -19,17 +19,17 @@ type Enqueuer interface {
 
 // SchedulerConfig configures the delivery scheduler.
 type SchedulerConfig struct {
-	Enqueuer Enqueuer
-	TaskID   string
-	TaskPath string
-	Logger   export.Logger
+	Enqueuer        Enqueuer
+	TaskID          string
+	TaskPath        string
+	ExecutionConfig job.Config
+	Logger          export.Logger
 }
 
 // Scheduler enqueues scheduled delivery jobs.
 type Scheduler struct {
 	enqueuer Enqueuer
-	taskID   string
-	taskPath string
+	builder  *MessageBuilder
 	logger   export.Logger
 }
 
@@ -39,19 +39,16 @@ func NewScheduler(cfg SchedulerConfig) *Scheduler {
 	if logger == nil {
 		logger = export.NopLogger{}
 	}
-	taskID := cfg.TaskID
-	if taskID == "" {
-		taskID = DefaultDeliveryTaskID
-	}
-	taskPath := cfg.TaskPath
-	if taskPath == "" {
-		taskPath = DefaultDeliveryTaskPath
-	}
+	builder := NewMessageBuilder(MessageBuilderConfig{
+		TaskID:          cfg.TaskID,
+		TaskPath:        cfg.TaskPath,
+		ExecutionConfig: cfg.ExecutionConfig,
+		Logger:          logger,
+	})
 
 	return &Scheduler{
 		enqueuer: cfg.Enqueuer,
-		taskID:   taskID,
-		taskPath: taskPath,
+		builder:  builder,
 		logger:   logger,
 	}
 }
@@ -64,16 +61,16 @@ func (s *Scheduler) RequestDelivery(ctx context.Context, req Request) error {
 	if s.enqueuer == nil {
 		return export.NewError(export.KindNotImpl, "job enqueuer not configured", nil)
 	}
+	if s.builder == nil {
+		return export.NewError(export.KindInternal, "message builder is nil", nil)
+	}
 
-	encoded, err := encodePayload(Payload{Request: req})
+	msg, err := s.builder.Build(ctx, req)
 	if err != nil {
 		return err
 	}
-
-	msg := &job.ExecutionMessage{
-		JobID:      s.taskID,
-		ScriptPath: s.taskPath,
-		Parameters: map[string]any{"payload": encoded},
+	if msg == nil {
+		return export.NewError(export.KindValidation, "execution message is required", nil)
 	}
 
 	if err := s.enqueuer.Enqueue(ctx, msg); err != nil {
