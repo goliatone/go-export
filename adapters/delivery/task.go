@@ -60,10 +60,10 @@ func NewTask(cfg TaskConfig) *Task {
 // GetID returns the task identifier.
 func (t *Task) GetID() string { return t.id }
 
-// GetHandler returns a handler for cron usage.
+// GetHandler returns a handler for non-queue execution paths.
 func (t *Task) GetHandler() func() error {
 	return func() error {
-		return t.Execute(context.Background(), &job.ExecutionMessage{})
+		return export.NewError(export.KindNotImpl, "queue payload required; use scheduler/worker execution", nil)
 	}
 }
 
