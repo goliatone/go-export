@@ -32,19 +32,16 @@ type Config struct {
 	IdempotencyTTL   time.Duration
 	TaskID           string
 	TaskPath         string
+	ExecutionConfig  job.Config
 	Logger           export.Logger
 }
 
 // Scheduler enqueues export generation jobs.
 type Scheduler struct {
-	service          export.Service
-	enqueuer         Enqueuer
-	tracker          export.ProgressTracker
-	idempotencyStore IdempotencyStore
-	idempotencyTTL   time.Duration
-	taskID           string
-	taskPath         string
-	logger           export.Logger
+	enqueuer Enqueuer
+	builder  *MessageBuilder
+	tracker  export.ProgressTracker
+	logger   export.Logger
 }
 
 // NewScheduler creates a new job scheduler adapter.
@@ -53,24 +50,22 @@ func NewScheduler(cfg Config) *Scheduler {
 	if logger == nil {
 		logger = export.NopLogger{}
 	}
-	taskID := cfg.TaskID
-	if taskID == "" {
-		taskID = DefaultGenerateTaskID
-	}
-	taskPath := cfg.TaskPath
-	if taskPath == "" {
-		taskPath = DefaultGenerateTaskPath
-	}
+	builder := NewMessageBuilder(MessageBuilderConfig{
+		Service:          cfg.Service,
+		Tracker:          cfg.Tracker,
+		IdempotencyStore: cfg.IdempotencyStore,
+		IdempotencyTTL:   cfg.IdempotencyTTL,
+		TaskID:           cfg.TaskID,
+		TaskPath:         cfg.TaskPath,
+		Config:           cfg.ExecutionConfig,
+		Logger:           logger,
+	})
 
 	return &Scheduler{
-		service:          cfg.Service,
-		enqueuer:         cfg.Enqueuer,
-		tracker:          cfg.Tracker,
-		idempotencyStore: cfg.IdempotencyStore,
-		idempotencyTTL:   cfg.IdempotencyTTL,
-		taskID:           taskID,
-		taskPath:         taskPath,
-		logger:           logger,
+		enqueuer: cfg.Enqueuer,
+		builder:  builder,
+		tracker:  cfg.Tracker,
+		logger:   logger,
 	}
 }
 
@@ -79,86 +74,40 @@ func (s *Scheduler) RequestExport(ctx context.Context, actor export.Actor, req e
 	if s == nil {
 		return export.ExportRecord{}, export.NewError(export.KindInternal, "scheduler is nil", nil)
 	}
-	if s.service == nil {
-		return export.ExportRecord{}, export.NewError(export.KindNotImpl, "export service not configured", nil)
-	}
 	if s.enqueuer == nil {
 		return export.ExportRecord{}, export.NewError(export.KindNotImpl, "job enqueuer not configured", nil)
 	}
-	if actor.ID == "" {
-		return export.ExportRecord{}, export.NewError(export.KindValidation, "actor ID is required", nil)
+	if s.builder == nil {
+		return export.ExportRecord{}, export.NewError(export.KindInternal, "message builder is nil", nil)
 	}
 
-	asyncReq := req
-	asyncReq.Delivery = export.DeliveryAsync
-	asyncReq.Output = nil
-
-	signature := ""
-	if asyncReq.IdempotencyKey != "" && s.idempotencyStore != nil {
-		signature = buildIdempotencyKey(asyncReq.IdempotencyKey, actor, asyncReq)
-		exportID, ok, err := s.idempotencyStore.Get(ctx, signature)
-		if err != nil {
-			return export.ExportRecord{}, err
-		}
-		if ok {
-			record, err := s.service.Status(ctx, actor, exportID)
-			if err == nil && isReusableState(record.State) {
-				return record, nil
-			}
-		}
-	}
-
-	record, err := s.service.RequestExport(ctx, actor, asyncReq)
+	result, err := s.builder.Build(ctx, actor, req)
 	if err != nil {
-		return export.ExportRecord{}, err
+		return result.Record, err
+	}
+	if result.Reused {
+		return result.Record, nil
+	}
+	if result.Message == nil {
+		return result.Record, export.NewError(export.KindValidation, "execution message is required", nil)
 	}
 
-	payload := Payload{
-		ExportID: record.ID,
-		Actor:    actor,
-		Request:  asyncReq,
-	}
-	encoded, err := encodePayload(payload)
-	if err != nil {
+	if err := s.enqueuer.Enqueue(ctx, result.Message); err != nil {
 		if s.tracker != nil {
-			if ferr := s.tracker.Fail(ctx, record.ID, err, map[string]any{"stage": "payload"}); ferr != nil {
-				s.logger.Errorf("payload failure tracking failed: %v", ferr)
-			}
-		}
-		return record, err
-	}
-
-	msg := &job.ExecutionMessage{
-		JobID:      s.taskID,
-		ScriptPath: s.taskPath,
-		Parameters: map[string]any{"payload": encoded},
-	}
-
-	if signature != "" {
-		msg.IdempotencyKey = signature
-		msg.DedupPolicy = job.DedupPolicyMerge
-	}
-
-	if err := s.enqueuer.Enqueue(ctx, msg); err != nil {
-		if s.tracker != nil {
-			if ferr := s.tracker.Fail(ctx, record.ID, err, map[string]any{"stage": "enqueue"}); ferr != nil {
+			if ferr := s.tracker.Fail(ctx, result.Record.ID, err, map[string]any{"stage": "enqueue"}); ferr != nil {
 				s.logger.Errorf("enqueue failure tracking failed: %v", ferr)
 			}
 		}
-		return record, err
+		return result.Record, err
 	}
 
-	if signature != "" && s.idempotencyStore != nil {
-		ttl := s.idempotencyTTL
-		if ttl == 0 {
-			ttl = 24 * time.Hour
-		}
-		if err := s.idempotencyStore.Set(ctx, signature, record.ID, ttl); err != nil {
+	if result.Signature != "" {
+		if err := s.builder.StoreIdempotency(ctx, result.Signature, result.Record.ID); err != nil {
 			s.logger.Errorf("idempotency store set failed: %v", err)
 		}
 	}
 
-	return record, nil
+	return result.Record, nil
 }
 
 func isReusableState(state export.ExportState) bool {
