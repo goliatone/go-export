@@ -35,6 +35,9 @@ type Payload struct {
 	Request  export.ExportRequest `json:"request"`
 }
 
+// MessageBuilderFunc builds an execution message for non-queue paths.
+type MessageBuilderFunc func(ctx context.Context) (*job.ExecutionMessage, error)
+
 // GenerateDispatch dispatches an export generation command.
 type GenerateDispatch func(ctx context.Context, msg exportcmd.GenerateExport) error
 
@@ -49,6 +52,7 @@ type TaskConfig struct {
 	Store          export.ArtifactStore
 	Logger         export.Logger
 	Dispatch       GenerateDispatch
+	MessageBuilder MessageBuilderFunc
 }
 
 // GenerateTask executes export generation jobs.
@@ -62,6 +66,7 @@ type GenerateTask struct {
 	store          export.ArtifactStore
 	logger         export.Logger
 	dispatch       GenerateDispatch
+	messageBuilder MessageBuilderFunc
 }
 
 // NewGenerateTask creates a new export generation task.
@@ -95,6 +100,7 @@ func NewGenerateTask(cfg TaskConfig) *GenerateTask {
 		store:          cfg.Store,
 		logger:         logger,
 		dispatch:       dispatch,
+		messageBuilder: cfg.MessageBuilder,
 	}
 }
 
@@ -104,7 +110,25 @@ func (t *GenerateTask) GetID() string { return t.id }
 // GetHandler returns a handler for non-queue execution paths.
 func (t *GenerateTask) GetHandler() func() error {
 	return func() error {
-		return export.NewError(export.KindNotImpl, "queue payload required; use scheduler/worker execution", nil)
+		if t == nil {
+			return export.NewError(export.KindInternal, "task is nil", nil)
+		}
+		if t.messageBuilder == nil {
+			return export.NewError(export.KindNotImpl, "job message builder not configured", nil)
+		}
+
+		ctx := context.Background()
+		msg, err := t.messageBuilder(ctx)
+		if err != nil {
+			if errors.Is(err, errExecutionSkipped) {
+				return nil
+			}
+			return err
+		}
+		if msg == nil {
+			return export.NewError(export.KindValidation, "execution message is required", nil)
+		}
+		return t.Execute(ctx, msg)
 	}
 }
 
