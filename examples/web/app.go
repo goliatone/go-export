@@ -30,19 +30,22 @@ import (
 
 // App holds the application dependencies.
 type App struct {
-	Config         config.Config
-	Logger         *SimpleLogger
-	Service        export.Service
-	Runner         *export.Runner
-	Tracker        export.ProgressTracker
-	Store          export.ArtifactStore
-	Delivery       *exportdelivery.Service
-	Scheduler      *exportjob.Scheduler
-	GenerateTask   *exportjob.GenerateTask
-	CancelRegistry *exportjob.CancelRegistry
-	Inbox          *inbox.Service
-	InboxHub       *inboxHub
-	subscriptions  []dispatcher.Subscription
+	Config            config.Config
+	Logger            *SimpleLogger
+	Service           export.Service
+	Runner            *export.Runner
+	Tracker           export.ProgressTracker
+	Store             export.ArtifactStore
+	Delivery          *exportdelivery.Service
+	DeliveryTask      *exportdelivery.Task
+	DeliveryBuilder   *exportdelivery.MessageBuilder
+	DeliveryScheduler *exportdelivery.Scheduler
+	Scheduler         *exportjob.Scheduler
+	GenerateTask      *exportjob.GenerateTask
+	CancelRegistry    *exportjob.CancelRegistry
+	Inbox             *inbox.Service
+	InboxHub          *inboxHub
+	subscriptions     []dispatcher.Subscription
 }
 
 // NewApp creates and initializes the application.
@@ -172,39 +175,51 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		})
 	}
 
-	var delivery *exportdelivery.Service
-	if notifier != nil {
-		normalizedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
-		delivery = exportdelivery.NewService(exportdelivery.Config{
-			Service:     baseService,
-			Store:       store,
-			EmailSender: logEmailSender{logger: logger},
-			Logger:      logger,
-			Notifier:    notifier,
-			LinkBuilder: func(exportID string, ref export.ArtifactRef) string {
-				_ = ref
-				if normalizedBaseURL == "" || exportID == "" {
-					return ""
-				}
-				return fmt.Sprintf("%s/admin/exports/%s/download", normalizedBaseURL, exportID)
-			},
-		})
-	}
+	normalizedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	delivery := exportdelivery.NewService(exportdelivery.Config{
+		Service:     baseService,
+		Store:       store,
+		EmailSender: logEmailSender{logger: logger},
+		Logger:      logger,
+		Notifier:    notifier,
+		LinkBuilder: func(exportID string, ref export.ArtifactRef) string {
+			_ = ref
+			if normalizedBaseURL == "" || exportID == "" {
+				return ""
+			}
+			return fmt.Sprintf("%s/admin/exports/%s/download", normalizedBaseURL, exportID)
+		},
+	})
+
+	deliveryTask := exportdelivery.NewTask(exportdelivery.TaskConfig{
+		Handler: delivery,
+		Logger:  logger,
+	})
+	deliveryBuilder := exportdelivery.NewMessageBuilder(exportdelivery.MessageBuilderConfig{
+		Logger: logger,
+	})
+	deliveryScheduler := exportdelivery.NewScheduler(exportdelivery.SchedulerConfig{
+		Enqueuer: deliveryEnqueuer{task: deliveryTask, logger: logger},
+		Logger:   logger,
+	})
 
 	app := &App{
-		Config:         cfg,
-		Logger:         logger,
-		Service:        service,
-		Runner:         runner,
-		Tracker:        tracker,
-		Store:          store,
-		Delivery:       delivery,
-		Scheduler:      scheduler,
-		GenerateTask:   generateTask,
-		CancelRegistry: cancelRegistry,
-		Inbox:          inboxSvc,
-		InboxHub:       inboxHub,
-		subscriptions:  subscriptions,
+		Config:            cfg,
+		Logger:            logger,
+		Service:           service,
+		Runner:            runner,
+		Tracker:           tracker,
+		Store:             store,
+		Delivery:          delivery,
+		DeliveryTask:      deliveryTask,
+		DeliveryBuilder:   deliveryBuilder,
+		DeliveryScheduler: deliveryScheduler,
+		Scheduler:         scheduler,
+		GenerateTask:      generateTask,
+		CancelRegistry:    cancelRegistry,
+		Inbox:             inboxSvc,
+		InboxHub:          inboxHub,
+		subscriptions:     subscriptions,
 	}
 
 	app.maybeSendDemoNotification(ctx)
@@ -235,6 +250,27 @@ func (l *SimpleLogger) Infof(format string, args ...any) {
 
 func (l *SimpleLogger) Errorf(format string, args ...any) {
 	fmt.Printf("[ERROR] %s: %s\n", l.prefix, fmt.Sprintf(format, args...))
+}
+
+type deliveryEnqueuer struct {
+	task   *exportdelivery.Task
+	logger *SimpleLogger
+}
+
+func (e deliveryEnqueuer) Enqueue(ctx context.Context, msg *gojob.ExecutionMessage) error {
+	_ = ctx
+	if e.task == nil {
+		return export.NewError(export.KindInternal, "delivery task is nil", nil)
+	}
+	go func() {
+		const asyncDeliveryTimeout = 5 * time.Minute
+		execCtx, cancel := context.WithTimeout(context.Background(), asyncDeliveryTimeout)
+		defer cancel()
+		if err := e.task.Execute(execCtx, msg); err != nil && e.logger != nil {
+			e.logger.Errorf("async delivery task failed: %v", err)
+		}
+	}()
+	return nil
 }
 
 // NoOpGuard allows all operations.
