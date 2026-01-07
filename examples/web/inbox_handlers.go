@@ -176,6 +176,12 @@ func (a *App) inboxUserID(c router.Context) string {
 	if a == nil {
 		return ""
 	}
+	if a.Config.Export.Notifications.Enabled {
+		recipients := a.Config.Export.Notifications.Recipients
+		if len(recipients) > 0 {
+			return strings.TrimSpace(recipients[0])
+		}
+	}
 	return strings.TrimSpace(a.getActor().ID)
 }
 
