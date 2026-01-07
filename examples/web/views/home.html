@@ -520,6 +520,13 @@
                 <input id="scheduleRecipients" type="text" value="{{ schedule_recipients }}" placeholder="demo@example.com">
             </div>
             <div class="form-group">
+                <label>&nbsp;</label>
+                <label style="display:flex;align-items:center;gap:0.4rem;font-weight:400;">
+                    <input id="scheduleNotify" type="checkbox" {% if notify_enabled %}checked{% endif %}>
+                    Send notification (inbox/email)
+                </label>
+            </div>
+            <div class="form-group">
                 <button id="scheduleBtn" onclick="triggerScheduledDelivery()">Run Scheduled Delivery</button>
             </div>
         </div>
@@ -729,13 +736,15 @@
             const scheduleMode = document.getElementById('scheduleMode').value;
             const deliveryMode = document.getElementById('deliveryMode').value;
             const recipientsRaw = document.getElementById('scheduleRecipients').value;
+            const notify = document.getElementById('scheduleNotify').checked;
 
             return {
                 definition: definition,
                 format: format,
                 schedule_mode: scheduleMode,
                 delivery_mode: deliveryMode,
-                recipients: parseRecipients(recipientsRaw)
+                recipients: parseRecipients(recipientsRaw),
+                notify: notify
             };
         }
 
@@ -760,8 +769,14 @@
             }))
             .then(data => {
                 statusEl.className = 'status success';
-                statusEl.textContent = `Delivery ${data.mode} for ${data.definition} (${data.format}) in ${data.duration_ms}ms.`;
+                const notifyLabel = data.notify_enabled ? ' with notification' : '';
+                statusEl.textContent = `Delivery ${data.mode} for ${data.definition} (${data.format}) in ${data.duration_ms}ms${notifyLabel}.`;
                 btn.disabled = false;
+                loadHistory();
+                if (data.notify_enabled) {
+                    loadInbox();
+                    loadInboxBadge();
+                }
             })
             .catch(error => {
                 statusEl.className = 'status error';
