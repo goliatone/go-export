@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 
 	"github.com/goliatone/go-export/export"
 	"github.com/goliatone/go-router"
@@ -10,11 +11,16 @@ import (
 // renderHome renders the home page.
 func (a *App) renderHome() router.HandlerFunc {
 	return func(c router.Context) error {
+		recipients := "demo@example.com"
+		if a != nil && len(a.Config.Export.Notifications.Recipients) > 0 {
+			recipients = strings.Join(a.Config.Export.Notifications.Recipients, ", ")
+		}
 		return c.Render("home", router.ViewContext{
-			"title":       "Go Export Demo",
-			"definitions": []string{"users", "products", "orders"},
-			"formats":     []string{"csv", "json", "ndjson", "xlsx"},
-			"max_rows":    a.Config.Export.MaxRows,
+			"title":               "Go Export Demo",
+			"definitions":         []string{"users", "products", "orders"},
+			"formats":             []string{"csv", "json", "ndjson", "xlsx"},
+			"max_rows":            a.Config.Export.MaxRows,
+			"schedule_recipients": recipients,
 		})
 	}
 }
