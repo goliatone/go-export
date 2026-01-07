@@ -111,6 +111,9 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 	service := baseService
 	baseURL := buildServerBaseURL(cfg.Server)
 
+	if cfg.Export.Notifications.Enabled && len(cfg.Export.Notifications.Recipients) == 0 {
+		cfg.Export.Notifications.Recipients = []string{defaultDemoEmail()}
+	}
 	if cfg.Export.Notifications.Enabled && len(cfg.Export.Notifications.Channels) == 0 {
 		cfg.Export.Notifications.Channels = []string{"email", "inbox"}
 	}
@@ -250,6 +253,10 @@ func (l *SimpleLogger) Infof(format string, args ...any) {
 
 func (l *SimpleLogger) Errorf(format string, args ...any) {
 	fmt.Printf("[ERROR] %s: %s\n", l.prefix, fmt.Sprintf(format, args...))
+}
+
+func defaultDemoEmail() string {
+	return "demo-user@example.com"
 }
 
 type deliveryEnqueuer struct {
