@@ -482,6 +482,52 @@
     </div>
 
     <div class="card">
+        <h2>Scheduled Delivery</h2>
+        <div class="export-form">
+            <div class="form-group">
+                <label for="scheduleDefinition">Definition</label>
+                <select id="scheduleDefinition">
+                    {% for def in definitions %}
+                    <option value="{{ def }}">{{ def|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="scheduleFormat">Format</label>
+                <select id="scheduleFormat">
+                    {% for format in formats %}
+                    <option value="{{ format }}">{{ format|upper }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="scheduleMode">Schedule Mode</label>
+                <select id="scheduleMode">
+                    <option value="" selected>Default (env/config)</option>
+                    <option value="execute_sync">Execute Sync</option>
+                    <option value="enqueue">Enqueue</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="deliveryMode">Delivery Mode</label>
+                <select id="deliveryMode">
+                    <option value="link" selected>Link</option>
+                    <option value="attachment">Attachment</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="scheduleRecipients">Recipients</label>
+                <input id="scheduleRecipients" type="text" value="{{ schedule_recipients }}" placeholder="demo@example.com">
+            </div>
+            <div class="form-group">
+                <button id="scheduleBtn" onclick="triggerScheduledDelivery()">Run Scheduled Delivery</button>
+            </div>
+        </div>
+        <p class="hint">Default uses EXPORT_DELIVERY_SCHEDULE_MODE; execute sync runs immediately.</p>
+        <div id="scheduleStatus" class="status"></div>
+    </div>
+
+    <div class="card">
         <h2>Export History</h2>
         <button class="btn-secondary" onclick="loadHistory()" style="margin-bottom: 1rem;">Refresh</button>
         <div id="historyContainer">
@@ -517,6 +563,7 @@
             <p><code>DELETE /api/inbox/:id</code> - Dismiss inbox item</p>
             <p><code>GET /ws/inbox</code> - WebSocket inbox stream</p>
             <p><code>GET /api/definitions</code> - List available definitions</p>
+            <p><code>POST /api/schedule/deliveries</code> - Run scheduled delivery (execute_sync|enqueue)</p>
         </div>
     </div>
 
@@ -549,6 +596,10 @@
         function parseSelectedIds() {
             const idsRaw = document.getElementById('selectedIds').value || '';
             return idsRaw.split(',').map(id => id.trim()).filter(Boolean);
+        }
+
+        function parseRecipients(raw) {
+            return (raw || '').split(',').map(value => value.trim()).filter(Boolean);
         }
 
         function updateEstimatedRows() {
@@ -668,6 +719,53 @@
             .catch(error => {
                 statusEl.className = 'status error';
                 statusEl.textContent = `Export failed: ${error.message}`;
+                btn.disabled = false;
+            });
+        }
+
+        function buildScheduledDeliveryRequest() {
+            const definition = document.getElementById('scheduleDefinition').value;
+            const format = document.getElementById('scheduleFormat').value;
+            const scheduleMode = document.getElementById('scheduleMode').value;
+            const deliveryMode = document.getElementById('deliveryMode').value;
+            const recipientsRaw = document.getElementById('scheduleRecipients').value;
+
+            return {
+                definition: definition,
+                format: format,
+                schedule_mode: scheduleMode,
+                delivery_mode: deliveryMode,
+                recipients: parseRecipients(recipientsRaw)
+            };
+        }
+
+        function triggerScheduledDelivery() {
+            const statusEl = document.getElementById('scheduleStatus');
+            const btn = document.getElementById('scheduleBtn');
+
+            statusEl.className = 'status loading';
+            statusEl.textContent = 'Scheduling delivery...';
+            btn.disabled = true;
+
+            fetch('/api/schedule/deliveries', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(buildScheduledDeliveryRequest())
+            })
+            .then(response => response.json().then(data => {
+                if (!response.ok) {
+                    throw new Error(data.error || 'Schedule failed');
+                }
+                return data;
+            }))
+            .then(data => {
+                statusEl.className = 'status success';
+                statusEl.textContent = `Delivery ${data.mode} for ${data.definition} (${data.format}) in ${data.duration_ms}ms.`;
+                btn.disabled = false;
+            })
+            .catch(error => {
+                statusEl.className = 'status error';
+                statusEl.textContent = `Schedule failed: ${error.message}`;
                 btn.disabled = false;
             });
         }
