@@ -16,6 +16,7 @@ type scheduleDeliveryInput struct {
 	DeliveryMode string   `json:"delivery_mode"`
 	ScheduleMode string   `json:"schedule_mode"`
 	Recipients   []string `json:"recipients"`
+	Notify       bool     `json:"notify"`
 }
 
 func (a *App) RunScheduledDeliveries(c router.Context) error {
@@ -54,7 +55,7 @@ func (a *App) RunScheduledDeliveries(c router.Context) error {
 		recipients = normalizeRecipients(a.Config.Export.Notifications.Recipients)
 	}
 	if len(recipients) == 0 {
-		recipients = []string{"demo@example.com"}
+		recipients = []string{defaultDemoEmail()}
 	}
 
 	req := exportdelivery.Request{
@@ -72,6 +73,14 @@ func (a *App) RunScheduledDeliveries(c router.Context) error {
 				},
 			},
 		},
+	}
+	notifyEnabled := input.Notify && a.Config.Export.Notifications.Enabled
+	if notifyEnabled {
+		req.Notify = exportdelivery.NotificationRequest{
+			Recipients: recipients,
+			Channels:   a.Config.Export.Notifications.Channels,
+			Message:    "Your export is ready.",
+		}
 	}
 
 	start := time.Now()
@@ -99,13 +108,14 @@ func (a *App) RunScheduledDeliveries(c router.Context) error {
 	}
 
 	return c.JSON(200, map[string]any{
-		"ok":            true,
-		"mode":          scheduleMode,
-		"delivery_mode": deliveryMode,
-		"definition":    definition,
-		"format":        format,
-		"recipients":    recipients,
-		"duration_ms":   time.Since(start).Milliseconds(),
+		"ok":             true,
+		"mode":           scheduleMode,
+		"delivery_mode":  deliveryMode,
+		"definition":     definition,
+		"format":         format,
+		"recipients":     recipients,
+		"notify_enabled": notifyEnabled,
+		"duration_ms":    time.Since(start).Milliseconds(),
 	})
 }
 
