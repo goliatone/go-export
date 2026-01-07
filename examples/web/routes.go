@@ -44,4 +44,7 @@ func (a *App) SetupRoutes(r router.Router[*fiber.App]) {
 
 	// API for available definitions
 	r.Get("/api/definitions", a.ListDefinitions)
+
+	// Demo schedule delivery endpoint
+	r.Post("/api/schedule/deliveries", a.RunScheduledDeliveries)
 }
