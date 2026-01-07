@@ -1,5 +1,41 @@
 # Changelog
 
+# [0.3.0](https://github.com/goliatone/go-export/compare/v0.2.0...v0.3.0) - (2026-01-07)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Data race in task ([4758c45](https://github.com/goliatone/go-export/commit/4758c45c52fb7128dadadcdf68528529178a880f))  - (goliatone)
+- Clean file naming, update notification setup ([bd60b41](https://github.com/goliatone/go-export/commit/bd60b4118913d61bb9bf42ed7cceb13a79898bce))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.3.0 ([1fd53a8](https://github.com/goliatone/go-export/commit/1fd53a895d57abadf7510b9f896d7d7f6c84330b))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Schedule handlers demo ([badd169](https://github.com/goliatone/go-export/commit/badd169fcf659e114b3756f1203476f50c39bc2c))  - (goliatone)
+- Delivery adapter message builder ([2d3de78](https://github.com/goliatone/go-export/commit/2d3de78bf775f7cb3d47a3e80ac017c3367c8000))  - (goliatone)
+- Job adapter message builder and batch executor ([3f8804e](https://github.com/goliatone/go-export/commit/3f8804e8b7295caf4ba0460a49ed3093e2f27d9d))  - (goliatone)
+- Centralized payload logi ([38552bf](https://github.com/goliatone/go-export/commit/38552bf8bea323586ae4be9ebd52d16e0c5595eb))  - (goliatone)
+- Delivery modes ([986d878](https://github.com/goliatone/go-export/commit/986d878a47a4db615ad87be5de666e13fe90c9bf))  - (goliatone)
+- Message builder to task to align runtimes ([8396fca](https://github.com/goliatone/go-export/commit/8396fcabd8e42edfc9225563902610c798560f75))  - (goliatone)
+- Job adapter ([82310a1](https://github.com/goliatone/go-export/commit/82310a15c439973b29dbc64c8a64303a180033ca))  - (goliatone)
+- Command batch execution ([a290a8f](https://github.com/goliatone/go-export/commit/a290a8ff9ef1cbf9e91760916368a84a166a7083))  - (goliatone)
+- Support for new go-job interfaces ([51c9411](https://github.com/goliatone/go-export/commit/51c941154766bdc379d8b06889e6930276c69319))  - (goliatone)
+- Link builder; ([8ac9bc8](https://github.com/goliatone/go-export/commit/8ac9bc8dbc9e308c08b1cd924d5ef01ce7ed8bf9))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.2.0 ([c9ea7cb](https://github.com/goliatone/go-export/commit/c9ea7cb55f6388a71a3fc5c03c864037c236df29))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update examples ([a25f8d1](https://github.com/goliatone/go-export/commit/a25f8d191f3038b534cd3641ae166b6451eb6508))  - (goliatone)
+- Update deps ([5e852df](https://github.com/goliatone/go-export/commit/5e852df2a8f3410f7258eade71999c36946797bf))  - (goliatone)
+- Update tests ([8febe34](https://github.com/goliatone/go-export/commit/8febe34046a252b7b880f4ea5995a2fe3a2bd310))  - (goliatone)
+- Update readme ([7b0d0a5](https://github.com/goliatone/go-export/commit/7b0d0a5b363ae8e27460d155f629af61fb3f840e))  - (goliatone)
+- Update example ([0bddf55](https://github.com/goliatone/go-export/commit/0bddf5514fadae2c221f8caf7c99614272c872ab))  - (goliatone)
+
 # [0.2.0](https://github.com/goliatone/go-export/compare/v0.1.0...v0.2.0) - (2026-01-01)
 
 ## <!-- 13 -->📦 Bumps
