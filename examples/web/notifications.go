@@ -433,7 +433,12 @@ func (s *notifyingService) resolveRecipients(actor export.Actor) []string {
 	if strings.TrimSpace(actor.ID) == "" {
 		return nil
 	}
-	return []string{strings.TrimSpace(actor.ID)}
+	actorID := strings.TrimSpace(actor.ID)
+	channels := notifyChannels(s.cfg.Channels)
+	if hasNotifyChannel(channels, "email") && !strings.Contains(actorID, "@") {
+		return []string{actorID + "@example.com"}
+	}
+	return []string{actorID}
 }
 
 func (s *notifyingService) resolveDownloadLink(ctx context.Context, key, exportID string) string {
@@ -467,6 +472,15 @@ func notifyChannels(channels []string) []string {
 		return []string{"email", "inbox"}
 	}
 	return channels
+}
+
+func hasNotifyChannel(channels []string, target string) bool {
+	for _, channel := range channels {
+		if strings.EqualFold(strings.TrimSpace(channel), target) {
+			return true
+		}
+	}
+	return false
 }
 
 func notifyRows(rows int64) int {
