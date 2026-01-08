@@ -15,7 +15,7 @@ require (
 	github.com/goliatone/go-job v0.14.0
 	github.com/goliatone/go-notifications v0.10.0
 	github.com/goliatone/go-router v0.41.0
-	github.com/goliatone/go-users v0.3.0
+	github.com/goliatone/go-users v0.4.0
 	github.com/google/uuid v1.6.0
 	github.com/uptrace/bun v1.2.16
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
