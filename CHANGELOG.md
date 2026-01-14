@@ -1,5 +1,23 @@
 # Changelog
 
+# [0.4.0](https://github.com/goliatone/go-export/compare/v0.3.0...v0.4.0) - (2026-01-14)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.4.0 ([d98d4cb](https://github.com/goliatone/go-export/commit/d98d4cbb07f2459a7a3c2752e76fe85007bef160))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Task to release template submodule ([adef560](https://github.com/goliatone/go-export/commit/adef5608e4e075c20ad52fb0e90d1593213d5ebf))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.3.0 ([4244416](https://github.com/goliatone/go-export/commit/42444165f3bf5381a9505021d403991daa16813f))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update deps ([f521c4e](https://github.com/goliatone/go-export/commit/f521c4ecf9be89768de2e5f57d725d87b6fba7b2))  - (goliatone)
+
 # [0.3.0](https://github.com/goliatone/go-export/compare/v0.2.0...v0.3.0) - (2026-01-07)
 
 ## <!-- 1 -->🐛 Bug Fixes
