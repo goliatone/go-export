@@ -255,6 +255,30 @@ function version:check {
     fi
 }
 
+##
+## -----
+##
+## gotemplate:sync
+##
+## Keep go-template module's go-export requirement in sync
+## with the release tag.
+##
+## Arguments:
+## @arg 1 {string} tag
+function gotemplate:sync {
+    local tag=${1}
+
+    if [ -z "$tag" ]; then
+        exit 1
+    fi
+
+    if [ ! -f "adapters/template/go-template/go.mod" ]; then
+        return 0
+    fi
+
+    (cd adapters/template/go-template && go mod edit -require=github.com/goliatone/go-export@v${tag})
+    (cd adapters/template/go-template && go mod tidy)
+}
 
 ##
 ## -----
@@ -291,12 +315,22 @@ function release {
     # Update version file
     version:set "${tag}"
 
+    # Sync go-template module to the new tag
+    gotemplate:sync "${tag}"
+
     # Add updated version file to git
     git add "${VERSION_FILE}"
+    if [ -f "adapters/template/go-template/go.mod" ]; then
+        git add adapters/template/go-template/go.mod
+        if [ -f "adapters/template/go-template/go.sum" ]; then
+            git add adapters/template/go-template/go.sum
+        fi
+    fi
     git commit -m "Bump version: v${tag}"
 
     # Create a new tag
     git tag -a "v${tag}" -m "${message}"
+    git tag -a "adapters/template/go-template/v${tag}" -m "Go template release: v${tag}"
 
     # Push tags and trigger release 🚀 🥳
     git push --tags
