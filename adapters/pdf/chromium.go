@@ -91,7 +91,7 @@ func (e *ChromiumEngine) Render(ctx context.Context, req RenderRequest) ([]byte,
 	if options.ExternalAssetsPolicy == export.PDFExternalAssetsBlock {
 		actions = append(actions,
 			network.Enable(),
-			network.SetBlockedURLS([]string{"http://*", "https://*"}),
+			network.SetBlockedURLs([]string{"http://*", "https://*"}),
 		)
 	}
 

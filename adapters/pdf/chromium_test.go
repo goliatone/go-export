@@ -3,13 +3,36 @@ package exportpdf
 import (
 	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/goliatone/go-export/export"
 )
+
+func chromeBinaryPath(t *testing.T) string {
+	t.Helper()
+
+	chromePath := os.Getenv("CHROME_BIN")
+	if chromePath == "" {
+		paths := []string{"google-chrome", "chromium", "chromium-browser"}
+		for _, candidate := range paths {
+			if path, err := exec.LookPath(candidate); err == nil {
+				chromePath = path
+				break
+			}
+		}
+	}
+	if chromePath == "" {
+		t.Skip("chromium binary not found; set CHROME_BIN to run this test")
+	}
+
+	return chromePath
+}
 
 func TestParseLengthInches(t *testing.T) {
 	tests := []struct {
@@ -68,19 +91,7 @@ func TestChromiumEngine_Render_Smoke(t *testing.T) {
 		t.Skip("skipping chromium smoke test in short mode")
 	}
 
-	chromePath := os.Getenv("CHROME_BIN")
-	if chromePath == "" {
-		paths := []string{"google-chrome", "chromium", "chromium-browser"}
-		for _, candidate := range paths {
-			if path, err := exec.LookPath(candidate); err == nil {
-				chromePath = path
-				break
-			}
-		}
-	}
-	if chromePath == "" {
-		t.Skip("chromium binary not found; set CHROME_BIN to run this test")
-	}
+	chromePath := chromeBinaryPath(t)
 
 	engine := &ChromiumEngine{
 		BrowserPath: chromePath,
@@ -103,5 +114,54 @@ func TestChromiumEngine_Render_Smoke(t *testing.T) {
 	}
 	if len(pdf) < 4 || string(pdf[:4]) != "%PDF" {
 		t.Fatalf("expected pdf output, got %q", string(pdf[:4]))
+	}
+}
+
+func TestChromiumEngine_Render_BlocksExternalAssets(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping chromium external asset test in short mode")
+	}
+
+	chromePath := chromeBinaryPath(t)
+	var hits int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	engine := &ChromiumEngine{
+		BrowserPath: chromePath,
+		Headless:    true,
+		Timeout:     10 * time.Second,
+		Args:        []string{"--no-sandbox", "--disable-dev-shm-usage"},
+		DefaultPDF: export.PDFOptions{
+			PrintBackground: boolPtr(true),
+		},
+	}
+	t.Cleanup(func() {
+		_ = engine.Close()
+	})
+
+	html := []byte("<html><body><img src=\"" + server.URL + "/asset.png\"></body></html>")
+	_, err := engine.Render(context.Background(), RenderRequest{
+		HTML: html,
+		Options: export.RenderOptions{
+			PDF: export.PDFOptions{
+				PageSize:             "A4",
+				ExternalAssetsPolicy: export.PDFExternalAssetsBlock,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	if atomic.LoadInt32(&hits) != 0 {
+		t.Fatalf("expected external assets to be blocked, got %d request(s)", hits)
 	}
 }
