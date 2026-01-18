@@ -1,5 +1,11 @@
 # Changelog
 
+# [0.4.1](https://github.com/goliatone/go-export/compare/v0.4.0...v0.4.1) - (2026-01-17)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Update Chromium external asset blocking for the latest cdproto API.  - (goliatone)
+
 # [0.4.0](https://github.com/goliatone/go-export/compare/v0.3.0...v0.4.0) - (2026-01-14)
 
 ## <!-- 13 -->📦 Bumps
@@ -173,5 +179,4 @@
 - Update format ([5fb8111](https://github.com/goliatone/go-export/commit/5fb811178ecac8f3bb3f0314c84779fc8a7da366))  - (goliatone)
 - Add query components ([f31f8ed](https://github.com/goliatone/go-export/commit/f31f8ed3b79da61d72bc638724f9a6f6d5ae025d))  - (goliatone)
 - Initial commit ([25a1a3a](https://github.com/goliatone/go-export/commit/25a1a3ab94b5221ca41d3772d980e3e58b51241f))  - (goliatone)
-
 
