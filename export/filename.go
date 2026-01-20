@@ -51,6 +51,8 @@ func renderFilename(def ResolvedDefinition, req ExportRequest, now time.Time) (s
 	switch req.Format {
 	case FormatTemplate:
 		ext = "html"
+	case FormatSQLite:
+		ext = "sqlite"
 	case FormatPDF:
 		ext = "pdf"
 	}
