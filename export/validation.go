@@ -101,6 +101,9 @@ func normalizeRequest(req ExportRequest) ExportRequest {
 	if req.RenderOptions.JSON.Mode == "" {
 		req.RenderOptions.JSON.Mode = JSONModeArray
 	}
+	if req.RenderOptions.SQLite.TableName == "" {
+		req.RenderOptions.SQLite.TableName = "data"
+	}
 	if req.RenderOptions.Format.Locale == "" {
 		req.RenderOptions.Format.Locale = req.Locale
 	}
