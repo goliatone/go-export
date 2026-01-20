@@ -14,6 +14,7 @@ const (
 	FormatJSON     Format = "json"
 	FormatNDJSON   Format = "ndjson"
 	FormatXLSX     Format = "xlsx"
+	FormatSQLite   Format = "sqlite"
 	FormatTemplate Format = "template"
 	FormatPDF      Format = "pdf"
 )
@@ -314,6 +315,11 @@ type XLSXOptions struct {
 	MaxBytes       int64
 }
 
+// SQLiteOptions configures SQLite output.
+type SQLiteOptions struct {
+	TableName string
+}
+
 // PDFExternalAssetsPolicy controls how external assets are handled in PDF rendering.
 type PDFExternalAssetsPolicy string
 
@@ -350,6 +356,7 @@ type RenderOptions struct {
 	JSON     JSONOptions
 	Template TemplateOptions
 	XLSX     XLSXOptions
+	SQLite   SQLiteOptions
 	PDF      PDFOptions
 	Format   FormatOptions
 }
