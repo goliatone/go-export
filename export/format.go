@@ -10,6 +10,8 @@ func NormalizeFormat(format Format) Format {
 		return FormatCSV
 	case "excel", "xls":
 		return FormatXLSX
+	case "sqlite", "sqlite3", "db":
+		return FormatSQLite
 	default:
 		return Format(normalized)
 	}
