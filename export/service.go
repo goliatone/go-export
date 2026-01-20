@@ -831,6 +831,8 @@ func contentTypeForFormat(format Format) string {
 		return "application/json"
 	case FormatXLSX:
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case FormatSQLite:
+		return "application/vnd.sqlite3"
 	case FormatTemplate:
 		return "text/html"
 	case FormatPDF:
