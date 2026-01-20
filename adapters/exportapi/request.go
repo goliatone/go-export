@@ -130,6 +130,7 @@ type renderOptionsPayload struct {
 	JSON     jsonOptionsPayload     `json:"json,omitempty"`
 	Template templateOptionsPayload `json:"template,omitempty"`
 	XLSX     xlsxOptionsPayload     `json:"xlsx,omitempty"`
+	SQLite   sqliteOptionsPayload   `json:"sqlite,omitempty"`
 	PDF      pdfOptionsPayload      `json:"pdf,omitempty"`
 	Format   formatOptionsPayload   `json:"format,omitempty"`
 }
@@ -164,6 +165,9 @@ func (p renderOptionsPayload) toRenderOptions() export.RenderOptions {
 			SheetName:      p.XLSX.SheetName,
 			MaxRows:        p.XLSX.MaxRows,
 			MaxBytes:       p.XLSX.MaxBytes,
+		},
+		SQLite: export.SQLiteOptions{
+			TableName: p.SQLite.TableName,
 		},
 		PDF: export.PDFOptions{
 			PageSize:             p.PDF.PageSize,
@@ -216,6 +220,10 @@ type xlsxOptionsPayload struct {
 	SheetName      string `json:"sheet_name,omitempty"`
 	MaxRows        int    `json:"max_rows,omitempty"`
 	MaxBytes       int64  `json:"max_bytes,omitempty"`
+}
+
+type sqliteOptionsPayload struct {
+	TableName string `json:"table_name,omitempty"`
 }
 
 type pdfOptionsPayload struct {
