@@ -33,3 +33,17 @@ func TestRenderFilename_PDFUsesPDF(t *testing.T) {
 		t.Fatalf("expected .pdf extension, got %q", name)
 	}
 }
+
+func TestRenderFilename_SQLiteUsesSQLite(t *testing.T) {
+	def := ResolvedDefinition{ExportDefinition: ExportDefinition{Name: "users"}}
+	req := ExportRequest{Definition: "users", Format: FormatSQLite}
+	now := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	name, err := renderFilename(def, req, now)
+	if err != nil {
+		t.Fatalf("render filename: %v", err)
+	}
+	if !strings.HasSuffix(name, ".sqlite") {
+		t.Fatalf("expected .sqlite extension, got %q", name)
+	}
+}
