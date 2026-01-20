@@ -5,7 +5,7 @@ go-export provides a streaming export engine with guard-first authorization, plu
 ## Features
 - Core runner + service layer with transport-agnostic interfaces.
 - Row sources for go-crud, repositories, named SQL queries, and callbacks.
-- Renderers for CSV, JSON/NDJSON, XLSX, plus optional templated outputs.
+- Renderers for CSV, JSON/NDJSON, XLSX, plus optional SQLite, template, and PDF outputs.
 - Sync downloads or async artifact generation with idempotency and retries.
 - Progress tracking, retention cleanup hooks, and observability events/metrics.
 - Optional go-notifications integration for export-ready email + inbox delivery with realtime updates.
@@ -150,13 +150,20 @@ Built-in renderers stream results without loading all rows:
 - CSV (headers, delimiter)
 - JSON array or NDJSON
 - XLSX streaming writer with type-aware formatting
+- SQLite renderer via `adapters/sqlite` (buffered, file-backed); enable explicitly and register the adapter.
 - Template renderer via `adapters/template` using go-template (Django/Pongo2 syntax); enable explicitly and choose buffered vs streaming strategies (buffered default).
 - Server-side PDF renderer via `adapters/pdf` (Format `pdf`), gated by `Enabled`, with a wkhtmltopdf engine or a custom chromedp/rod engine.
 
 Renderer behavior summary:
 - CSV/JSON/NDJSON/XLSX: streaming
+- SQLite: buffered (temp file-backed database)
 - Template: buffered by default; streaming supported when templates range over `.Rows` (channel-backed)
 - PDF: HTML template render + server-side conversion (buffered HTML)
+
+SQLite notes:
+- The SQLite renderer is an optional adapter; register it on the runner and allowlist `FormatSQLite` in definitions.
+- Uses the pure Go `modernc.org/sqlite` driver (no CGO).
+- Table name defaults to `data` and can be overridden via `RenderOptions.SQLite.TableName`.
 
 ### Delivery Modes
 `DeliveryAuto` selects sync or async based on configured thresholds.
