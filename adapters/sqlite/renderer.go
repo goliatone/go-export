@@ -17,7 +17,7 @@ import (
 
 const defaultTableName = "data"
 
-// Renderer writes rows into a SQLite database file.
+// Renderer writes rows into a SQLite database file (disabled by default).
 type Renderer struct {
 	Enabled   bool
 	TableName string
