@@ -56,3 +56,6 @@ go.work
 .gocache
 .cache
 .modcache
+.claude
+docs/*
+!docs/GUIDE_*.md
