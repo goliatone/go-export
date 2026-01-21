@@ -18,7 +18,7 @@ func (a *App) renderHome() router.HandlerFunc {
 		return c.Render("home", router.ViewContext{
 			"title":               "Go Export Demo",
 			"definitions":         []string{"users", "products", "orders"},
-			"formats":             []string{"csv", "json", "ndjson", "xlsx"},
+			"formats":             []string{"csv", "json", "ndjson", "xlsx", "sqlite"},
 			"max_rows":            a.Config.Export.MaxRows,
 			"schedule_recipients": recipients,
 			"notify_enabled":      a.Config.Export.Notifications.Enabled,
@@ -32,19 +32,19 @@ func (a *App) ListDefinitions(c router.Context) error {
 		{
 			"name":     "users",
 			"resource": "users",
-			"formats":  []string{"csv", "json", "ndjson", "xlsx"},
+			"formats":  []string{"csv", "json", "ndjson", "xlsx", "sqlite"},
 			"columns":  []string{"id", "email", "name", "role", "created_at"},
 		},
 		{
 			"name":     "products",
 			"resource": "products",
-			"formats":  []string{"csv", "json", "ndjson", "xlsx"},
+			"formats":  []string{"csv", "json", "ndjson", "xlsx", "sqlite"},
 			"columns":  []string{"id", "name", "sku", "price", "quantity"},
 		},
 		{
 			"name":     "orders",
 			"resource": "orders",
-			"formats":  []string{"csv", "json", "ndjson", "xlsx"},
+			"formats":  []string{"csv", "json", "ndjson", "xlsx", "sqlite"},
 			"columns":  []string{"id", "customer", "total", "status", "created_at"},
 		},
 	}
