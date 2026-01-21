@@ -17,6 +17,7 @@ import (
 	exportdelivery "github.com/goliatone/go-export/adapters/delivery"
 	exportjob "github.com/goliatone/go-export/adapters/job"
 	exportpdf "github.com/goliatone/go-export/adapters/pdf"
+	exportsqlite "github.com/goliatone/go-export/adapters/sqlite"
 	exporttemplate "github.com/goliatone/go-export/adapters/template"
 	"github.com/goliatone/go-export/examples"
 	"github.com/goliatone/go-export/examples/web/config"
@@ -435,6 +436,7 @@ func registerDemoDefinitions(registry *export.DefinitionRegistry) {
 		export.FormatJSON,
 		export.FormatNDJSON,
 		export.FormatXLSX,
+		export.FormatSQLite,
 		export.FormatTemplate,
 		export.FormatPDF,
 	}
@@ -528,6 +530,7 @@ func registerTemplateRenderers(runner *export.Runner, cfg config.Config, logger 
 	runner.Renderers.Register(export.FormatJSON, export.JSONRenderer{})
 	runner.Renderers.Register(export.FormatNDJSON, export.JSONRenderer{})
 	runner.Renderers.Register(export.FormatXLSX, export.XLSXRenderer{})
+	runner.Renderers.Register(export.FormatSQLite, exportsqlite.Renderer{Enabled: true})
 
 	// Initialize template renderer if enabled
 	if cfg.Export.Template.Enabled {
