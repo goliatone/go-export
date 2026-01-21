@@ -191,6 +191,7 @@ func main() {
 		log.Printf("Export API: http://%s/admin/exports", addr)
 		log.Printf("Export History: http://%s/admin/exports/history", addr)
 		log.Printf("Demo UI: http://%s/", addr)
+		log.Printf("Formats: csv, json, ndjson, xlsx, sqlite (template/pdf optional)")
 		if err := srv.Serve(addr); err != nil {
 			log.Fatalf("server error: %v", err)
 		}
