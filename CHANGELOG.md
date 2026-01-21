@@ -1,5 +1,32 @@
 # Changelog
 
+# [0.6.0](https://github.com/goliatone/go-export/compare/v0.5.1...v0.6.0) - (2026-01-21)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.6.0 ([0e9cde5](https://github.com/goliatone/go-export/commit/0e9cde5e7c1f0ec09a33a5730c037a4288b36d44))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Sqlite exporter ([718819b](https://github.com/goliatone/go-export/commit/718819b41f50b9eff921ae6617474d152bc0dd01))  - (goliatone)
+- Export validation with sqlite options ([edff21f](https://github.com/goliatone/go-export/commit/edff21fdf9cca7570f7cc5feddb7d441074397c1))  - (goliatone)
+- Sqlite export adapter ([3fb7f0a](https://github.com/goliatone/go-export/commit/3fb7f0a4c5e696dd3cc12420377888f94e114459))  - (goliatone)
+- Export sqlite options ([ce8d7df](https://github.com/goliatone/go-export/commit/ce8d7df0cb426e78113dab4d922d95f6a624e6f1))  - (goliatone)
+- Export format type ([b26fe4b](https://github.com/goliatone/go-export/commit/b26fe4b3d215d127160b159706006fa3f6e5897c))  - (goliatone)
+- Sqlite to export formats ([5658e33](https://github.com/goliatone/go-export/commit/5658e33ff3a7f7d3ae7d49d394b4976425633fa2))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.5.1 ([3ef59ee](https://github.com/goliatone/go-export/commit/3ef59ee37695fbd04130aa6edad2bbcc9a79bc8e))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update gitignore ([87d4b49](https://github.com/goliatone/go-export/commit/87d4b49ff932d9e0ad8636943634862b98fca0e6))  - (goliatone)
+- Update guides ([83e87f8](https://github.com/goliatone/go-export/commit/83e87f8b2ff511522aa7d56c5182a0a41104a341))  - (goliatone)
+- Update readme ([fed8809](https://github.com/goliatone/go-export/commit/fed880958e1d63be47ead570fc958c8ef2022d7e))  - (goliatone)
+- Update tests ([9120284](https://github.com/goliatone/go-export/commit/9120284cc98f6c711605b06fe531cd497cbc10de))  - (goliatone)
+- Update docs ([8dee057](https://github.com/goliatone/go-export/commit/8dee057cc731bd6c96bcc18a470e1bf92cf8a01f))  - (goliatone)
+
 # [0.5.1](https://github.com/goliatone/go-export/compare/v0.5.0...v0.5.1) - (2026-01-18)
 
 ## <!-- 13 -->📦 Bumps
