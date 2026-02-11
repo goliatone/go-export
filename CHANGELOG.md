@@ -1,14 +1,29 @@
 # Changelog
 
-## [Unreleased]
+# [0.7.0](https://github.com/goliatone/go-export/compare/v0.6.0...v0.7.0) - (2026-02-11)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.7.0 ([554fa77](https://github.com/goliatone/go-export/commit/554fa77c97b6eb55726ef6708ccbd10451520723))  - (goliatone)
 
 ## <!-- 16 -->➕ Add
 
-- Align `go-export` logger contract to `go-logger` (`export.Logger` aliasing `glog.Logger`) and migrate runtime callsites to leveled logging.
+- Export logging helper ([e70585b](https://github.com/goliatone/go-export/commit/e70585b3b887d3c574cffd0b50b4dbd0b39ef326))  - (goliatone)
 
-## <!-- 1 -->💥 Breaking Changes
+## <!-- 2 -->🚜 Refactor
 
-- Remove legacy formatting logger compatibility (`Debugf/Infof/Errorf` adapters) in favor of a single `go-logger` contract.
+- Use new logger API ([e51a52b](https://github.com/goliatone/go-export/commit/e51a52b5c704fb8749034b9031a12b4b9bb82c9e))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.6.0 ([cb5c55f](https://github.com/goliatone/go-export/commit/cb5c55f961d3fd284d0074e59928c9661dcfee2f))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update docs ([62518be](https://github.com/goliatone/go-export/commit/62518beaa9077c5d446918f35c13b3e4616e687f))  - (goliatone)
+- Update tests ([17c809c](https://github.com/goliatone/go-export/commit/17c809c342e41c23b72ad3952a9545edc35b42e8))  - (goliatone)
+- Update example ([9ce2867](https://github.com/goliatone/go-export/commit/9ce2867666dc24026430af847002b84c18b99852))  - (goliatone)
+- Update deps ([3501332](https://github.com/goliatone/go-export/commit/350133294e6f45751cfab4d983a66dc244560786))  - (goliatone)
 
 # [0.6.0](https://github.com/goliatone/go-export/compare/v0.5.1...v0.6.0) - (2026-01-21)
 
@@ -243,3 +258,5 @@
 - Update format ([5fb8111](https://github.com/goliatone/go-export/commit/5fb811178ecac8f3bb3f0314c84779fc8a7da366))  - (goliatone)
 - Add query components ([f31f8ed](https://github.com/goliatone/go-export/commit/f31f8ed3b79da61d72bc638724f9a6f6d5ae025d))  - (goliatone)
 - Initial commit ([25a1a3a](https://github.com/goliatone/go-export/commit/25a1a3ab94b5221ca41d3772d980e3e58b51241f))  - (goliatone)
+
+
