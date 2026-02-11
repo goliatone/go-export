@@ -440,13 +440,6 @@ type ActorProvider interface {
 	FromContext(ctx context.Context) (Actor, error)
 }
 
-// Logger provides logging hooks.
-type Logger interface {
-	Debugf(format string, args ...any)
-	Infof(format string, args ...any)
-	Errorf(format string, args ...any)
-}
-
 // ChangeEvent describes lifecycle events.
 type ChangeEvent struct {
 	Name       string
