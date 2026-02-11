@@ -41,7 +41,7 @@ func NewRunner() *Runner {
 		RowSources:   NewRowSourceRegistry(),
 		Renderers:    renderers,
 		Transformers: NewTransformerRegistry(),
-		Logger:       NopLogger{},
+		Logger:       NopLogger(),
 		Now:          time.Now,
 		IDGenerator:  defaultIDGenerator(),
 	}
@@ -59,7 +59,7 @@ func (r *Runner) Run(ctx context.Context, req ExportRequest) (ExportResult, erro
 		r.Now = time.Now
 	}
 	if r.Logger == nil {
-		r.Logger = NopLogger{}
+		r.Logger = NopLogger()
 	}
 	if r.IDGenerator == nil {
 		r.IDGenerator = defaultIDGenerator()
@@ -370,13 +370,6 @@ func applyMaxDuration(ctx context.Context, nowFn func() time.Time, limit time.Du
 	}
 	return context.WithDeadline(ctx, deadline)
 }
-
-// NopLogger is a no-op logger.
-type NopLogger struct{}
-
-func (NopLogger) Debugf(string, ...any) {}
-func (NopLogger) Infof(string, ...any)  {}
-func (NopLogger) Errorf(string, ...any) {}
 
 func defaultIDGenerator() func() string {
 	return func() string {
