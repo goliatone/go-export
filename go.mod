@@ -9,13 +9,13 @@ require (
 	github.com/chromedp/chromedp v0.14.2
 	github.com/flosch/pongo2/v6 v6.0.0
 	github.com/gofiber/fiber/v2 v2.52.10
-	github.com/goliatone/go-command v0.12.0
-	github.com/goliatone/go-errors v0.9.0
+	github.com/goliatone/go-command v0.13.0
+	github.com/goliatone/go-errors v0.10.0
 	github.com/goliatone/go-i18n v0.2.0
 	github.com/goliatone/go-job v0.14.0
-	github.com/goliatone/go-notifications v0.10.0
-	github.com/goliatone/go-router v0.41.0
-	github.com/goliatone/go-users v0.4.0
+	github.com/goliatone/go-notifications v0.12.0
+	github.com/goliatone/go-router v0.42.0
+	github.com/goliatone/go-users v0.11.0
 	github.com/google/uuid v1.6.0
 	github.com/uptrace/bun v1.2.16
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.16
@@ -61,16 +61,16 @@ require (
 	github.com/gofiber/template v1.8.3 // indirect
 	github.com/gofiber/template/django/v3 v3.1.13 // indirect
 	github.com/gofiber/utils v1.1.0 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
-	github.com/goliatone/go-auth v0.19.0 // indirect
-	github.com/goliatone/go-composite-fs v0.0.1 // indirect
-	github.com/goliatone/go-config v0.7.0 // indirect
-	github.com/goliatone/go-logger v0.4.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
+	github.com/goliatone/go-auth v0.23.0 // indirect
+	github.com/goliatone/go-composite-fs v0.3.0 // indirect
+	github.com/goliatone/go-config v0.8.0 // indirect
+	github.com/goliatone/go-logger v0.8.0
 	github.com/goliatone/go-masker v0.1.0 // indirect
-	github.com/goliatone/go-options v0.5.0 // indirect
-	github.com/goliatone/go-persistence-bun v0.7.0 // indirect
+	github.com/goliatone/go-options v0.7.0 // indirect
+	github.com/goliatone/go-persistence-bun v0.10.0 // indirect
 	github.com/goliatone/go-print v0.4.1 // indirect
-	github.com/goliatone/go-repository-bun v0.10.0 // indirect
+	github.com/goliatone/go-repository-bun v0.12.0 // indirect
 	github.com/goliatone/go-template v0.3.1 // indirect
 	github.com/goliatone/hashid v0.1.1 // indirect
 	github.com/goodsign/monday v1.0.2 // indirect
@@ -134,5 +134,5 @@ require (
 	modernc.org/libc v1.67.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.40.1 // indirect
+	modernc.org/sqlite v1.40.1
 )
