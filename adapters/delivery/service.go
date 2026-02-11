@@ -60,7 +60,7 @@ type Service struct {
 func NewService(cfg Config) *Service {
 	logger := cfg.Logger
 	if logger == nil {
-		logger = export.NopLogger{}
+		logger = export.NopLogger()
 	}
 
 	linkTTL := cfg.LinkTTL
@@ -147,7 +147,13 @@ func (s *Service) Deliver(ctx context.Context, req Request) (Result, error) {
 				}
 				notifyRequested = false
 				if s.logger != nil {
-					s.logger.Errorf("export ready notification skipped: signed URL failed: %v", err)
+					s.logger.Error("export ready notification skipped: signed URL failed",
+						"error", err,
+						"export_id", record.ID,
+						"definition", exportReq.Definition,
+						"format", exportReq.Format,
+						"delivery", req.Mode,
+					)
 				}
 			}
 		}
@@ -172,7 +178,13 @@ func (s *Service) Deliver(ctx context.Context, req Request) (Result, error) {
 				return Result{}, err
 			}
 			if s.logger != nil {
-				s.logger.Errorf("export ready notification failed: %v", err)
+				s.logger.Error("export ready notification failed",
+					"error", err,
+					"export_id", record.ID,
+					"definition", exportReq.Definition,
+					"format", exportReq.Format,
+					"delivery", req.Mode,
+				)
 			}
 		}
 	}
