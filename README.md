@@ -197,6 +197,13 @@ Hooks for audit and metrics:
 - `MetricsHook` emits counters for rows/bytes/duration/error kinds.
 - `adapters/activity` logs events to go-users ActivitySink.
 
+### Logging Contract
+`go-export` uses a single logger contract aligned with `go-logger`:
+- `export.Logger` is an alias of `github.com/goliatone/go-logger/glog.Logger`.
+- `export.LoggerProvider` is an alias of `glog.LoggerProvider`.
+- `export.FieldsLogger` is an alias of `glog.FieldsLogger`.
+- `export.NopLogger()` returns the canonical no-op logger.
+
 ### Realtime Inbox (go-notifications)
 The example app wires `go-notifications` to deliver export-ready events into an inbox channel and broadcast realtime updates.
 
