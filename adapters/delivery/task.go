@@ -41,7 +41,7 @@ type Task struct {
 func NewTask(cfg TaskConfig) *Task {
 	logger := cfg.Logger
 	if logger == nil {
-		logger = export.NopLogger{}
+		logger = export.NopLogger()
 	}
 	id := cfg.ID
 	if id == "" {
