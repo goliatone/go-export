@@ -1,33 +1,35 @@
-package export
+package export_test
 
 import (
 	"bytes"
 	"context"
 	"database/sql"
+	"io"
 	"os"
 	"testing"
 
 	exportsqlite "github.com/goliatone/go-export/adapters/sqlite"
+	"github.com/goliatone/go-export/export"
 )
 
 func TestRunner_SQLiteExport(t *testing.T) {
-	runner := NewRunner()
-	if err := runner.Renderers.Register(FormatSQLite, exportsqlite.Renderer{Enabled: true}); err != nil {
+	runner := export.NewRunner()
+	if err := runner.Renderers.Register(export.FormatSQLite, exportsqlite.Renderer{Enabled: true}); err != nil {
 		t.Fatalf("register renderer: %v", err)
 	}
-	if err := runner.Definitions.Register(ExportDefinition{
+	if err := runner.Definitions.Register(export.ExportDefinition{
 		Name:           "users",
 		RowSourceKey:   "stub",
-		AllowedFormats: []Format{FormatSQLite},
-		Schema: Schema{
-			Columns: []Column{{Name: "id", Type: "int"}, {Name: "name"}},
+		AllowedFormats: []export.Format{export.FormatSQLite},
+		Schema: export.Schema{
+			Columns: []export.Column{{Name: "id", Type: "int"}, {Name: "name"}},
 		},
 	}); err != nil {
 		t.Fatalf("register definition: %v", err)
 	}
 
-	iter := &stubIterator{rows: []Row{{int64(1), "alice"}, {int64(2), "bob"}}}
-	if err := runner.RowSources.Register("stub", func(req ExportRequest, def ResolvedDefinition) (RowSource, error) {
+	iter := &stubIterator{rows: []export.Row{{int64(1), "alice"}, {int64(2), "bob"}}}
+	if err := runner.RowSources.Register("stub", func(req export.ExportRequest, def export.ResolvedDefinition) (export.RowSource, error) {
 		_ = req
 		_ = def
 		return &stubSource{iter: iter}, nil
@@ -36,9 +38,9 @@ func TestRunner_SQLiteExport(t *testing.T) {
 	}
 
 	buf := &bytes.Buffer{}
-	result, err := runner.Run(context.Background(), ExportRequest{
+	result, err := runner.Run(context.Background(), export.ExportRequest{
 		Definition: "users",
-		Format:     FormatSQLite,
+		Format:     export.FormatSQLite,
 		Output:     buf,
 	})
 	if err != nil {
@@ -67,6 +69,35 @@ func TestRunner_SQLiteExport(t *testing.T) {
 	if count != 2 {
 		t.Fatalf("expected 2 rows in db, got %d", count)
 	}
+}
+
+type stubSource struct {
+	iter export.RowIterator
+}
+
+func (s *stubSource) Open(ctx context.Context, spec export.RowSourceSpec) (export.RowIterator, error) {
+	_ = ctx
+	_ = spec
+	return s.iter, nil
+}
+
+type stubIterator struct {
+	rows  []export.Row
+	index int
+}
+
+func (it *stubIterator) Next(ctx context.Context) (export.Row, error) {
+	_ = ctx
+	if it.index >= len(it.rows) {
+		return nil, io.EOF
+	}
+	row := it.rows[it.index]
+	it.index++
+	return row, nil
+}
+
+func (it *stubIterator) Close() error {
+	return nil
 }
 
 func writeTempSQLite(t *testing.T, data []byte) string {
