@@ -27,7 +27,7 @@ type MessageBuilder struct {
 func NewMessageBuilder(cfg MessageBuilderConfig) *MessageBuilder {
 	logger := cfg.Logger
 	if logger == nil {
-		logger = export.NopLogger{}
+		logger = export.NopLogger()
 	}
 	taskID := cfg.TaskID
 	if taskID == "" {
