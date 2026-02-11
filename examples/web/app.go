@@ -165,7 +165,7 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 				defer cancel()
 
 				if err := generateTask.Execute(execCtx, msg); err != nil {
-					logger.Errorf("async export task failed: %v", err)
+					logger.Error("async export task failed", "error", err)
 				}
 			}()
 			return nil
@@ -244,16 +244,41 @@ type SimpleLogger struct {
 	prefix string
 }
 
-func (l *SimpleLogger) Debugf(format string, args ...any) {
-	fmt.Printf("[DEBUG] %s: %s\n", l.prefix, fmt.Sprintf(format, args...))
+func (l *SimpleLogger) Trace(msg string, args ...any) {
+	l.log("TRACE", msg, args...)
 }
 
-func (l *SimpleLogger) Infof(format string, args ...any) {
-	fmt.Printf("[INFO] %s: %s\n", l.prefix, fmt.Sprintf(format, args...))
+func (l *SimpleLogger) Debug(msg string, args ...any) {
+	l.log("DEBUG", msg, args...)
 }
 
-func (l *SimpleLogger) Errorf(format string, args ...any) {
-	fmt.Printf("[ERROR] %s: %s\n", l.prefix, fmt.Sprintf(format, args...))
+func (l *SimpleLogger) Info(msg string, args ...any) {
+	l.log("INFO", msg, args...)
+}
+
+func (l *SimpleLogger) Warn(msg string, args ...any) {
+	l.log("WARN", msg, args...)
+}
+
+func (l *SimpleLogger) Error(msg string, args ...any) {
+	l.log("ERROR", msg, args...)
+}
+
+func (l *SimpleLogger) Fatal(msg string, args ...any) {
+	l.log("FATAL", msg, args...)
+	os.Exit(1)
+}
+
+func (l *SimpleLogger) WithContext(ctx context.Context) export.Logger {
+	_ = ctx
+	return l
+}
+
+func (l *SimpleLogger) log(level, msg string, args ...any) {
+	if l == nil {
+		return
+	}
+	fmt.Printf("[%s] %s: %s%s\n", level, l.prefix, msg, formatArgs(args))
 }
 
 func defaultDemoEmail() string {
@@ -275,7 +300,7 @@ func (e deliveryEnqueuer) Enqueue(ctx context.Context, msg *gojob.ExecutionMessa
 		execCtx, cancel := context.WithTimeout(context.Background(), asyncDeliveryTimeout)
 		defer cancel()
 		if err := e.task.Execute(execCtx, msg); err != nil && e.logger != nil {
-			e.logger.Errorf("async delivery task failed: %v", err)
+			e.logger.Error("async delivery task failed", "error", err)
 		}
 	}()
 	return nil
@@ -554,7 +579,7 @@ func registerTemplateRenderers(runner *export.Runner, cfg config.Config, logger 
 		// Register to_json filter
 		if err := pongo2.RegisterFilter("to_json", toJSONFilter); err != nil {
 			// Filter may already exist, ignore error
-			logger.Debugf("to_json filter registration: %v", err)
+			logger.Debug("to_json filter registration", "error", err)
 		}
 
 		executor := &Pongo2Executor{
@@ -570,7 +595,7 @@ func registerTemplateRenderers(runner *export.Runner, cfg config.Config, logger 
 		}
 
 		runner.Renderers.Register(export.FormatTemplate, templateRenderer)
-		logger.Infof("Template renderer enabled (dir: %s, template: %s)", templateDir, cfg.Export.Template.TemplateName)
+		logger.Info("template renderer enabled", "dir", templateDir, "template", cfg.Export.Template.TemplateName)
 
 		// Initialize PDF renderer if enabled (requires template renderer)
 		if cfg.Export.PDF.Enabled {
@@ -616,7 +641,7 @@ func registerTemplateRenderers(runner *export.Runner, cfg config.Config, logger 
 			}
 
 			runner.Renderers.Register(export.FormatPDF, pdfRenderer)
-			logger.Infof("PDF renderer enabled (engine: %s)", engineLabel)
+			logger.Info("pdf renderer enabled", "engine", engineLabel)
 		}
 	}
 

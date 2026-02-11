@@ -178,7 +178,7 @@ func (h *inboxHub) logf(format string, args ...any) {
 	if h == nil || h.logger == nil {
 		return
 	}
-	h.logger.Infof(format, args...)
+	h.logger.Info(fmt.Sprintf(format, args...))
 }
 
 func inboxUserIDFromPayload(payload any) string {
