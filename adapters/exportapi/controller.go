@@ -77,7 +77,7 @@ func NewController(cfg Config) *Controller {
 	}
 	logger := cfg.Logger
 	if logger == nil {
-		logger = export.NopLogger{}
+		logger = export.NopLogger()
 	}
 	decoder := cfg.RequestDecoder
 	if decoder == nil {
@@ -327,7 +327,7 @@ func (c *Controller) handleAsync(req Request, res Response, actor export.Actor, 
 			ttl = 24 * time.Hour
 		}
 		if err := c.idempotencyStore.Set(req.Context(), signature, record.ID, ttl); err != nil {
-			c.logger.Errorf("idempotency store set failed: %v", err)
+			c.logger.Error("idempotency store set failed", "error", err, "export_id", record.ID)
 		}
 	}
 
@@ -392,14 +392,26 @@ func (c *Controller) handleSync(req Request, res Response, actor export.Actor, r
 	}
 	if streamErr != nil {
 		if tracker.Written() {
-			c.logger.Errorf("sync export stream failed: %v", streamErr)
+			c.logger.Error("sync export stream failed",
+				"error", streamErr,
+				"export_id", exportID,
+				"definition", runReq.Definition,
+				"format", runReq.Format,
+				"delivery", export.DeliverySync,
+			)
 			return
 		}
 		WriteError(res, streamErr)
 		return
 	}
 	if runErr != nil {
-		c.logger.Errorf("sync export failed after write: %v", runErr)
+		c.logger.Error("sync export failed after write",
+			"error", runErr,
+			"export_id", exportID,
+			"definition", runReq.Definition,
+			"format", runReq.Format,
+			"delivery", export.DeliverySync,
+		)
 	}
 }
 
@@ -532,7 +544,11 @@ func (c *Controller) handleDownload(req Request, res Response, exportID string) 
 			WriteError(res, streamErr)
 			return
 		}
-		c.logger.Errorf("download stream failed: %v", streamErr)
+		c.logger.Error("download stream failed",
+			"error", streamErr,
+			"export_id", info.ExportID,
+			"artifact_key", info.Artifact.Key,
+		)
 	}
 }
 
@@ -599,7 +615,7 @@ func (c *Controller) handlePreview(req Request, res Response, exportID string) {
 	if writer, ok := res.Writer(); ok {
 		res.WriteHeader(http.StatusOK)
 		if _, err := io.Copy(writer, reader); err != nil {
-			c.logger.Errorf("preview copy failed: %v", err)
+			c.logger.Error("preview copy failed", "error", err, "export_id", exportID)
 		}
 		return
 	}
@@ -612,7 +628,7 @@ func (c *Controller) handlePreview(req Request, res Response, exportID string) {
 
 	res.WriteHeader(http.StatusOK)
 	if _, err := res.Write(buffer.Bytes()); err != nil {
-		c.logger.Errorf("preview buffer write failed: %v", err)
+		c.logger.Error("preview buffer write failed", "error", err, "export_id", exportID)
 	}
 }
 
