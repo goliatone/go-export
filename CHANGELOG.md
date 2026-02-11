@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+## <!-- 16 -->➕ Add
+
+- Align `go-export` logger contract to `go-logger` (`export.Logger` aliasing `glog.Logger`) and migrate runtime callsites to leveled logging.
+
+## <!-- 1 -->💥 Breaking Changes
+
+- Remove legacy formatting logger compatibility (`Debugf/Infof/Errorf` adapters) in favor of a single `go-logger` contract.
+
 # [0.6.0](https://github.com/goliatone/go-export/compare/v0.5.1...v0.6.0) - (2026-01-21)
 
 ## <!-- 13 -->📦 Bumps
@@ -233,5 +243,3 @@
 - Update format ([5fb8111](https://github.com/goliatone/go-export/commit/5fb811178ecac8f3bb3f0314c84779fc8a7da366))  - (goliatone)
 - Add query components ([f31f8ed](https://github.com/goliatone/go-export/commit/f31f8ed3b79da61d72bc638724f9a6f6d5ae025d))  - (goliatone)
 - Initial commit ([25a1a3a](https://github.com/goliatone/go-export/commit/25a1a3ab94b5221ca41d3772d980e3e58b51241f))  - (goliatone)
-
-
