@@ -127,18 +127,18 @@ func logNotificationConfig(logger *SimpleLogger, cfg config.NotificationConfig) 
 	if logger == nil {
 		return
 	}
-	logger.Infof("notifications enabled recipients=%v channels=%v smtp_host=%s smtp_port=%d smtp_from=%s smtp_user=%s smtp_tls=%t smtp_starttls=%t smtp_skip_tls_verify=%t smtp_auth_disabled=%t smtp_plain_only=%t",
-		cfg.Recipients,
-		cfg.Channels,
-		cfg.SMTP.Host,
-		cfg.SMTP.Port,
-		cfg.SMTP.From,
-		cfg.SMTP.Username,
-		cfg.SMTP.UseTLS,
-		cfg.SMTP.UseStartTLS,
-		cfg.SMTP.SkipTLSVerify,
-		cfg.SMTP.AuthDisabled,
-		cfg.SMTP.PlainOnly,
+	logger.Info("notifications enabled",
+		"recipients", cfg.Recipients,
+		"channels", cfg.Channels,
+		"smtp_host", cfg.SMTP.Host,
+		"smtp_port", cfg.SMTP.Port,
+		"smtp_from", cfg.SMTP.From,
+		"smtp_user", cfg.SMTP.Username,
+		"smtp_tls", cfg.SMTP.UseTLS,
+		"smtp_starttls", cfg.SMTP.UseStartTLS,
+		"smtp_skip_tls_verify", cfg.SMTP.SkipTLSVerify,
+		"smtp_auth_disabled", cfg.SMTP.AuthDisabled,
+		"smtp_plain_only", cfg.SMTP.PlainOnly,
 	)
 }
 
@@ -464,7 +464,7 @@ func (s *notifyingService) logNotifySkip(message string) {
 	if s.logger == nil {
 		return
 	}
-	s.logger.Infof("%s", message)
+	s.logger.Info(message)
 }
 
 func notifyChannels(channels []string) []string {
@@ -668,10 +668,10 @@ func (a *App) maybeSendDemoNotification(ctx context.Context) {
 		}
 
 		if _, err := a.Delivery.Deliver(demoCtx, req); err != nil {
-			a.Logger.Errorf("demo export notification failed: %v", err)
+			a.Logger.Error("demo export notification failed", "error", err)
 			return
 		}
-		a.Logger.Infof("demo export notification sent via go-notifications")
+		a.Logger.Info("demo export notification sent via go-notifications")
 	}()
 }
 
@@ -685,7 +685,7 @@ func (l logEmailSender) Send(ctx context.Context, msg exportdelivery.EmailMessag
 		return nil
 	}
 	hasAttachment := msg.Attachment != nil
-	l.logger.Infof("delivery email: to=%v subject=%s attachment=%t", msg.To, msg.Subject, hasAttachment)
+	l.logger.Info("delivery email", "to", msg.To, "subject", msg.Subject, "attachment", hasAttachment)
 	return nil
 }
 
@@ -729,7 +729,7 @@ func (l notificationsLogger) log(level, msg string, args ...any) {
 		return
 	}
 	allArgs := append(fieldArgs(l.fields), args...)
-	l.base.Infof("[go-notifications][%s] %s%s", level, msg, formatArgs(allArgs))
+	l.base.Info(fmt.Sprintf("[go-notifications][%s] %s%s", level, msg, formatArgs(allArgs)))
 }
 
 func fieldArgs(fields map[string]any) []any {
