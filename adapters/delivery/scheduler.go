@@ -37,7 +37,7 @@ type Scheduler struct {
 func NewScheduler(cfg SchedulerConfig) *Scheduler {
 	logger := cfg.Logger
 	if logger == nil {
-		logger = export.NopLogger{}
+		logger = export.NopLogger()
 	}
 	builder := NewMessageBuilder(MessageBuilderConfig{
 		TaskID:          cfg.TaskID,
