@@ -73,7 +73,7 @@ type GenerateTask struct {
 func NewGenerateTask(cfg TaskConfig) *GenerateTask {
 	logger := cfg.Logger
 	if logger == nil {
-		logger = export.NopLogger{}
+		logger = export.NopLogger()
 	}
 	id := cfg.ID
 	if id == "" {
