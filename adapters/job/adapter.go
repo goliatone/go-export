@@ -48,7 +48,7 @@ type Scheduler struct {
 func NewScheduler(cfg Config) *Scheduler {
 	logger := cfg.Logger
 	if logger == nil {
-		logger = export.NopLogger{}
+		logger = export.NopLogger()
 	}
 	builder := NewMessageBuilder(MessageBuilderConfig{
 		Service:          cfg.Service,
@@ -95,7 +95,10 @@ func (s *Scheduler) RequestExport(ctx context.Context, actor export.Actor, req e
 	if err := s.enqueuer.Enqueue(ctx, result.Message); err != nil {
 		if s.tracker != nil {
 			if ferr := s.tracker.Fail(ctx, result.Record.ID, err, map[string]any{"stage": "enqueue"}); ferr != nil {
-				s.logger.Errorf("enqueue failure tracking failed: %v", ferr)
+				s.logger.Error("enqueue failure tracking failed",
+					"error", ferr,
+					"export_id", result.Record.ID,
+				)
 			}
 		}
 		return result.Record, err
@@ -103,7 +106,11 @@ func (s *Scheduler) RequestExport(ctx context.Context, actor export.Actor, req e
 
 	if result.Signature != "" {
 		if err := s.builder.StoreIdempotency(ctx, result.Signature, result.Record.ID); err != nil {
-			s.logger.Errorf("idempotency store set failed: %v", err)
+			s.logger.Error("idempotency store set failed",
+				"error", err,
+				"export_id", result.Record.ID,
+				"signature", result.Signature,
+			)
 		}
 	}
 
