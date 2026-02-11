@@ -47,7 +47,7 @@ type BuildResult struct {
 func NewMessageBuilder(cfg MessageBuilderConfig) *MessageBuilder {
 	logger := cfg.Logger
 	if logger == nil {
-		logger = export.NopLogger{}
+		logger = export.NopLogger()
 	}
 	taskID := cfg.TaskID
 	if taskID == "" {
@@ -119,7 +119,13 @@ func (b *MessageBuilder) Build(ctx context.Context, actor export.Actor, req expo
 	if err != nil {
 		if b.tracker != nil {
 			if ferr := b.tracker.Fail(ctx, record.ID, err, map[string]any{"stage": "payload"}); ferr != nil {
-				b.logger.Errorf("payload failure tracking failed: %v", ferr)
+				b.logger.Error("payload failure tracking failed",
+					"error", ferr,
+					"export_id", record.ID,
+					"definition", asyncReq.Definition,
+					"format", asyncReq.Format,
+					"delivery", asyncReq.Delivery,
+				)
 			}
 		}
 		return BuildResult{Record: record, Signature: signature}, err
