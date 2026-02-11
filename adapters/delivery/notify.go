@@ -243,7 +243,7 @@ func resolveNotifyAttachments(req NotificationRequest, attachment *Attachment, m
 	}
 	if maxSize > 0 && size > maxSize {
 		if logger != nil {
-			logger.Infof("notification attachment skipped: size %d exceeds limit %d", size, maxSize)
+			logger.Info("notification attachment skipped", "size", size, "limit", maxSize)
 		}
 		return nil
 	}
