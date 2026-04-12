@@ -1,5 +1,23 @@
 # Changelog
 
+# [0.8.0](https://github.com/goliatone/go-export/compare/v0.7.0...v0.8.0) - (2026-04-12)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Dependency api change ([070b044](https://github.com/goliatone/go-export/commit/070b044cfbeebe618c37c6b415b106fa0314132d))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.8.0 ([1c316d6](https://github.com/goliatone/go-export/commit/1c316d60f750d826e0d2cdca1ac6072c32edfd1f))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.7.0 ([46a3b0c](https://github.com/goliatone/go-export/commit/46a3b0c3a6faf0cbd2adb89f5369645273d14d21))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update app build ([80f79ec](https://github.com/goliatone/go-export/commit/80f79ec92e2fadb0d52199220c68e520c8013cde))  - (goliatone)
+
 # [0.7.0](https://github.com/goliatone/go-export/compare/v0.6.0...v0.7.0) - (2026-02-11)
 
 ## <!-- 13 -->📦 Bumps
