@@ -1,11 +1,9 @@
 module github.com/goliatone/go-export/adapters/template/go-template
 
-go 1.24.10
-
-toolchain go1.24.11
+go 1.26
 
 require (
-	github.com/goliatone/go-export v0.7.0
+	github.com/goliatone/go-export v0.8.0
 	github.com/goliatone/go-template v0.3.1
 )
 
@@ -25,7 +23,7 @@ require (
 	github.com/xuri/nfp v0.0.0-20230919160717-d98342af3f05 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 )
 
