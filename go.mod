@@ -1,12 +1,10 @@
 module github.com/goliatone/go-export
 
-go 1.24.10
-
-toolchain go1.24.11
+go 1.26
 
 require (
-	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
-	github.com/chromedp/chromedp v0.14.2
+	github.com/chromedp/cdproto v0.0.0-20260405000525-47a8ff65b46a
+	github.com/chromedp/chromedp v0.15.1
 	github.com/flosch/pongo2/v6 v6.0.0
 	github.com/gofiber/fiber/v2 v2.52.10
 	github.com/goliatone/go-command v0.13.0
@@ -47,7 +45,7 @@ require (
 	github.com/fasthttp/websocket v1.5.8 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/gertd/go-pluralize v0.2.1 // indirect
-	github.com/go-json-experiment/json v0.0.0-20250725192818-e39067aee2d2 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
@@ -123,7 +121,7 @@ require (
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20251209150349-8475f28825e9 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251213004720-97cd9d5aeac2 // indirect
