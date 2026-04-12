@@ -91,7 +91,7 @@ func (e *ChromiumEngine) Render(ctx context.Context, req RenderRequest) ([]byte,
 	if options.ExternalAssetsPolicy == export.PDFExternalAssetsBlock {
 		actions = append(actions,
 			network.Enable(),
-			network.SetBlockedURLs([]string{"http://*", "https://*"}),
+			network.SetBlockedURLs().WithURLPatterns(blockExternalAssetPatterns()),
 		)
 	}
 
@@ -119,6 +119,13 @@ func (e *ChromiumEngine) Render(ctx context.Context, req RenderRequest) ([]byte,
 		return nil, export.NewError(export.KindInternal, "chromium pdf render failed", err)
 	}
 	return pdf, nil
+}
+
+func blockExternalAssetPatterns() []*network.BlockPattern {
+	return []*network.BlockPattern{
+		{URLPattern: "http://*:*/*", Block: true},
+		{URLPattern: "https://*:*/*", Block: true},
+	}
 }
 
 // Close releases Chromium resources if they have been initialized.
