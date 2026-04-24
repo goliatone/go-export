@@ -564,17 +564,21 @@ func buildNotificationAdapters(logSink notiflogger.Logger, cfg config.Notificati
 		if from == "" {
 			from = defaultNotifyFrom
 		}
+		tlsPolicy := adapters.TLSPolicyStrict
+		if cfg.SMTP.SkipTLSVerify {
+			tlsPolicy = adapters.TLSPolicyInsecureSkipVerify
+		}
 		smtpCfg := notifsmtp.Config{
-			Host:          cfg.SMTP.Host,
-			Port:          cfg.SMTP.Port,
-			From:          from,
-			Username:      cfg.SMTP.Username,
-			Password:      cfg.SMTP.Password,
-			UseTLS:        cfg.SMTP.UseTLS,
-			UseStartTLS:   cfg.SMTP.UseStartTLS,
-			SkipTLSVerify: cfg.SMTP.SkipTLSVerify,
-			AuthDisabled:  cfg.SMTP.AuthDisabled,
-			PlainOnly:     cfg.SMTP.PlainOnly,
+			Host:         cfg.SMTP.Host,
+			Port:         cfg.SMTP.Port,
+			From:         from,
+			Username:     cfg.SMTP.Username,
+			Password:     cfg.SMTP.Password,
+			UseTLS:       cfg.SMTP.UseTLS,
+			UseStartTLS:  cfg.SMTP.UseStartTLS,
+			TLSPolicy:    tlsPolicy,
+			AuthDisabled: cfg.SMTP.AuthDisabled,
+			PlainOnly:    cfg.SMTP.PlainOnly,
 		}
 		smtpAdapter := notifsmtp.New(logSink, notifsmtp.WithConfig(smtpCfg))
 		adaptersList = append(adaptersList, smtpDefaultsAdapter{base: smtpAdapter, from: from})
