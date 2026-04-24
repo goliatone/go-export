@@ -7,8 +7,8 @@ import (
 
 // Envelope implements go-job envelope interfaces without depending on go-job structs.
 type Envelope struct {
-	Actor          export.Actor   `json:"actor,omitempty"`
-	Scope          export.Scope   `json:"scope,omitempty"`
+	Actor          export.Actor   `json:"actor"`
+	Scope          export.Scope   `json:"scope"`
 	Params         map[string]any `json:"params,omitempty"`
 	IdempotencyKey string         `json:"idempotency_key,omitempty"`
 	RawBytes       int            `json:"-"`

@@ -2,6 +2,7 @@ package export
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -132,12 +133,7 @@ func validateSelection(selection Selection) error {
 }
 
 func formatAllowed(format Format, allowed []Format) bool {
-	for _, f := range allowed {
-		if f == format {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, format)
 }
 
 func resolveColumns(schema []Column, requested []string, policy ExportPolicy) ([]Column, []string, map[int]any, error) {

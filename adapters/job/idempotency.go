@@ -117,7 +117,7 @@ type idempotencyPayload struct {
 	Variant      string           `json:"variant,omitempty"`
 	Format       export.Format    `json:"format"`
 	Columns      []string         `json:"columns,omitempty"`
-	Selection    export.Selection `json:"selection,omitempty"`
+	Selection    export.Selection `json:"selection"`
 	QueryPayload json.RawMessage  `json:"query,omitempty"`
 }
 

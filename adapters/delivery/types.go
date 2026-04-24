@@ -47,8 +47,8 @@ type WebhookTarget struct {
 // Target defines a destination for export delivery.
 type Target struct {
 	Kind    TargetKind    `json:"kind"`
-	Email   EmailTarget   `json:"email,omitempty"`
-	Webhook WebhookTarget `json:"webhook,omitempty"`
+	Email   EmailTarget   `json:"email"`
+	Webhook WebhookTarget `json:"webhook"`
 }
 
 // Request describes a scheduled delivery request.
@@ -58,8 +58,8 @@ type Request struct {
 	Targets  []Target             `json:"targets"`
 	Mode     DeliveryMode         `json:"mode"`
 	LinkTTL  time.Duration        `json:"link_ttl,omitempty"`
-	Message  Message              `json:"message,omitempty"`
-	Notify   NotificationRequest  `json:"notify,omitempty"`
+	Message  Message              `json:"message"`
+	Notify   NotificationRequest  `json:"notify"`
 	Metadata map[string]any       `json:"metadata,omitempty"`
 }
 

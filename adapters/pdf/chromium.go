@@ -166,7 +166,7 @@ func (e *ChromiumEngine) defaultPDFOptions() export.PDFOptions {
 		defaults.Scale = defaultPDFScale
 	}
 	if defaults.PrintBackground == nil {
-		defaults.PrintBackground = boolPtr(true)
+		defaults.PrintBackground = new(true)
 	}
 	return defaults
 }
@@ -361,6 +361,7 @@ func allocatorOptionsFromArgs(args []string) []chromedp.ExecAllocatorOption {
 	return options
 }
 
+//go:fix inline
 func boolPtr(value bool) *bool {
-	return &value
+	return new(value)
 }

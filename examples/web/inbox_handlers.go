@@ -33,10 +33,7 @@ func (a *App) ListInbox(c router.Context) error {
 	if limit > 200 {
 		limit = 200
 	}
-	offset := c.QueryInt("offset", 0)
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(c.QueryInt("offset", 0), 0)
 
 	filters := inbox.ListFilters{
 		UnreadOnly:       parseInboxBool(c.Query("unread")),

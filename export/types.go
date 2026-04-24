@@ -188,9 +188,9 @@ type ExportRecord struct {
 	BytesWritten int64         `json:"bytes_written,omitempty"`
 	Artifact     ArtifactRef   `json:"artifact"`
 	CreatedAt    time.Time     `json:"created_at"`
-	StartedAt    time.Time     `json:"started_at,omitempty"`
-	CompletedAt  time.Time     `json:"completed_at,omitempty"`
-	ExpiresAt    time.Time     `json:"expires_at,omitempty"`
+	StartedAt    time.Time     `json:"started_at"`
+	CompletedAt  time.Time     `json:"completed_at"`
+	ExpiresAt    time.Time     `json:"expires_at"`
 }
 
 // Actor identifies the requesting principal.
@@ -366,8 +366,8 @@ type ArtifactMeta struct {
 	ContentType string    `json:"content_type,omitempty"`
 	Size        int64     `json:"size,omitempty"`
 	Filename    string    `json:"filename,omitempty"`
-	CreatedAt   time.Time `json:"created_at,omitempty"`
-	ExpiresAt   time.Time `json:"expires_at,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 // ArtifactRef references a stored artifact.

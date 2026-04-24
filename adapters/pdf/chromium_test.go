@@ -61,7 +61,7 @@ func TestParseLengthInches(t *testing.T) {
 func TestBuildPrintToPDFParams_PageSize(t *testing.T) {
 	params, err := buildPrintToPDFParams(export.PDFOptions{
 		PageSize:        "A4",
-		PrintBackground: boolPtr(true),
+		PrintBackground: new(true),
 		MarginTop:       "10mm",
 	})
 	if err != nil {
@@ -99,7 +99,7 @@ func TestChromiumEngine_Render_Smoke(t *testing.T) {
 		Timeout:     10 * time.Second,
 		Args:        []string{"--no-sandbox", "--disable-dev-shm-usage"},
 		DefaultPDF: export.PDFOptions{
-			PrintBackground: boolPtr(true),
+			PrintBackground: new(true),
 		},
 	}
 
@@ -138,7 +138,7 @@ func TestChromiumEngine_Render_BlocksExternalAssets(t *testing.T) {
 		Timeout:     10 * time.Second,
 		Args:        []string{"--no-sandbox", "--disable-dev-shm-usage"},
 		DefaultPDF: export.PDFOptions{
-			PrintBackground: boolPtr(true),
+			PrintBackground: new(true),
 		},
 	}
 	t.Cleanup(func() {

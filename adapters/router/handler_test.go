@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"io"
+	"maps"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -626,9 +627,7 @@ func (c *testContext) LocalsMerge(key any, value map[string]any) map[string]any 
 	if merged == nil {
 		merged = map[string]any{}
 	}
-	for k, v := range value {
-		merged[k] = v
-	}
+	maps.Copy(merged, value)
 	c.locals[key] = merged
 	return merged
 }

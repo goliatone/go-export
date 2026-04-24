@@ -612,8 +612,8 @@ func registerTemplateRenderers(runner *export.Runner, cfg config.Config, logger 
 					Args:        cfg.Export.PDF.Args,
 					DefaultPDF: export.PDFOptions{
 						PageSize:             cfg.Export.PDF.PageSize,
-						PrintBackground:      boolPtr(cfg.Export.PDF.PrintBackground),
-						PreferCSSPageSize:    boolPtr(cfg.Export.PDF.PreferCSSPageSize),
+						PrintBackground:      new(cfg.Export.PDF.PrintBackground),
+						PreferCSSPageSize:    new(cfg.Export.PDF.PreferCSSPageSize),
 						Scale:                cfg.Export.PDF.Scale,
 						MarginTop:            cfg.Export.PDF.MarginTop,
 						MarginBottom:         cfg.Export.PDF.MarginBottom,
@@ -792,8 +792,9 @@ func mapFromStringKeyedMap(data any) (pongo2.Context, bool) {
 	return ctx, true
 }
 
+//go:fix inline
 func boolPtr(value bool) *bool {
-	return &value
+	return new(value)
 }
 
 // toJSONFilter is a pongo2 filter that converts data to JSON string.

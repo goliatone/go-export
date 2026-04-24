@@ -91,7 +91,7 @@ type requestPayload struct {
 	SourceVariant     string               `json:"source_variant,omitempty"`
 	Format            export.Format        `json:"format,omitempty"`
 	Query             json.RawMessage      `json:"query,omitempty"`
-	Selection         selectionPayload     `json:"selection,omitempty"`
+	Selection         selectionPayload     `json:"selection"`
 	Columns           []string             `json:"columns,omitempty"`
 	Locale            string               `json:"locale,omitempty"`
 	Timezone          string               `json:"timezone,omitempty"`
@@ -99,8 +99,8 @@ type requestPayload struct {
 	IdempotencyKey    string               `json:"idempotency_key,omitempty"`
 	EstimatedRows     int                  `json:"estimated_rows,omitempty"`
 	EstimatedBytes    int64                `json:"estimated_bytes,omitempty"`
-	EstimatedDuration durationValue        `json:"estimated_duration,omitempty"`
-	RenderOptions     renderOptionsPayload `json:"render_options,omitempty"`
+	EstimatedDuration durationValue        `json:"estimated_duration"`
+	RenderOptions     renderOptionsPayload `json:"render_options"`
 }
 
 type selectionPayload struct {
@@ -126,13 +126,13 @@ type selectionQueryPayload struct {
 }
 
 type renderOptionsPayload struct {
-	CSV      csvOptionsPayload      `json:"csv,omitempty"`
-	JSON     jsonOptionsPayload     `json:"json,omitempty"`
-	Template templateOptionsPayload `json:"template,omitempty"`
-	XLSX     xlsxOptionsPayload     `json:"xlsx,omitempty"`
-	SQLite   sqliteOptionsPayload   `json:"sqlite,omitempty"`
-	PDF      pdfOptionsPayload      `json:"pdf,omitempty"`
-	Format   formatOptionsPayload   `json:"format,omitempty"`
+	CSV      csvOptionsPayload      `json:"csv"`
+	JSON     jsonOptionsPayload     `json:"json"`
+	Template templateOptionsPayload `json:"template"`
+	XLSX     xlsxOptionsPayload     `json:"xlsx"`
+	SQLite   sqliteOptionsPayload   `json:"sqlite"`
+	PDF      pdfOptionsPayload      `json:"pdf"`
+	Format   formatOptionsPayload   `json:"format"`
 }
 
 func (p renderOptionsPayload) toRenderOptions() export.RenderOptions {
@@ -206,7 +206,7 @@ type templateOptionsPayload struct {
 	Layout       string                  `json:"layout,omitempty"`
 	Title        string                  `json:"title,omitempty"`
 	Definition   string                  `json:"definition,omitempty"`
-	GeneratedAt  time.Time               `json:"generated_at,omitempty"`
+	GeneratedAt  time.Time               `json:"generated_at"`
 	ChartConfig  any                     `json:"chart_config,omitempty"`
 	Theme        map[string]any          `json:"theme,omitempty"`
 	Header       map[string]any          `json:"header,omitempty"`

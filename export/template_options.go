@@ -1,5 +1,7 @@
 package export
 
+import "maps"
+
 func mergeTemplateOptions(base TemplateOptions, override TemplateOptions) TemplateOptions {
 	out := base
 	if override.Strategy != "" {
@@ -38,11 +40,7 @@ func mergeTemplateMap(base, override map[string]any) map[string]any {
 		return nil
 	}
 	out := make(map[string]any, len(base)+len(override))
-	for key, value := range base {
-		out[key] = value
-	}
-	for key, value := range override {
-		out[key] = value
-	}
+	maps.Copy(out, base)
+	maps.Copy(out, override)
 	return out
 }

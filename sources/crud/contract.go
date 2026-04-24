@@ -32,7 +32,7 @@ type DatagridRequest struct {
 	Resource       string              `json:"resource,omitempty"`
 	Format         export.Format       `json:"format,omitempty"`
 	Query          *Query              `json:"query,omitempty"`
-	Selection      SelectionPayload    `json:"selection,omitempty"`
+	Selection      SelectionPayload    `json:"selection"`
 	Columns        []string            `json:"columns,omitempty"`
 	Delivery       export.DeliveryMode `json:"delivery,omitempty"`
 	EstimatedRows  int                 `json:"estimated_rows,omitempty"`

@@ -276,7 +276,7 @@ func placeholders(count int) []string {
 		return nil
 	}
 	out := make([]string, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		out[i] = "?"
 	}
 	return out

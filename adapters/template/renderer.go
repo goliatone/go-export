@@ -23,7 +23,7 @@ type TemplateMeta struct {
 	Title        string         `json:"title,omitempty"`
 	Definition   string         `json:"definition,omitempty"`
 	Generated    string         `json:"generated,omitempty"`
-	GeneratedAt  time.Time      `json:"generated_at,omitempty"`
+	GeneratedAt  time.Time      `json:"generated_at"`
 	ChartConfig  any            `json:"chart_config,omitempty"`
 	Theme        map[string]any `json:"theme,omitempty"`
 	Header       map[string]any `json:"header,omitempty"`

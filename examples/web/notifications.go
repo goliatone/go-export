@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"maps"
 	"os"
 	"sort"
 	"strings"
@@ -246,9 +247,7 @@ func cloneJSONMap(src domain.JSONMap) domain.JSONMap {
 		return nil
 	}
 	out := make(domain.JSONMap, len(src))
-	for key, value := range src {
-		out[key] = value
-	}
+	maps.Copy(out, src)
 	return out
 }
 
@@ -699,12 +698,8 @@ func (l notificationsLogger) WithFields(fields map[string]any) notiflogger.Logge
 		return l
 	}
 	next := notificationsLogger{base: l.base, fields: make(map[string]any, len(l.fields)+len(fields))}
-	for k, v := range l.fields {
-		next.fields[k] = v
-	}
-	for k, v := range fields {
-		next.fields[k] = v
-	}
+	maps.Copy(next.fields, l.fields)
+	maps.Copy(next.fields, fields)
 	return next
 }
 

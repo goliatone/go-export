@@ -2,6 +2,7 @@ package exportactivity
 
 import (
 	"context"
+	"maps"
 	"strings"
 
 	"github.com/goliatone/go-export/export"
@@ -87,9 +88,7 @@ func buildMetadata(evt export.ChangeEvent) map[string]any {
 	if evt.Delivery != "" {
 		meta["delivery"] = evt.Delivery
 	}
-	for k, v := range evt.Metadata {
-		meta[k] = v
-	}
+	maps.Copy(meta, evt.Metadata)
 	return meta
 }
 

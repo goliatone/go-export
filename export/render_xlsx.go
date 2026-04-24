@@ -58,7 +58,7 @@ func (r XLSXRenderer) Render(ctx context.Context, schema Schema, rows RowIterato
 
 	rowIndex := 1
 	if opts.XLSX.IncludeHeaders {
-		headers := make([]interface{}, len(schema.Columns))
+		headers := make([]any, len(schema.Columns))
 		for i, col := range schema.Columns {
 			label := col.Label
 			if label == "" {
@@ -105,7 +105,7 @@ func (r XLSXRenderer) Render(ctx context.Context, schema Schema, rows RowIterato
 			return stats, NewError(KindValidation, "xlsx row limit exceeded", nil)
 		}
 
-		cells := make([]interface{}, len(row))
+		cells := make([]any, len(row))
 		for i, value := range row {
 			cell, err := buildXLSXCell(schema.Columns[i], value, formatter, columnStyles[i])
 			if err != nil {

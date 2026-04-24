@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"time"
 )
 
@@ -347,12 +348,8 @@ func mergeMetadata(base, extra map[string]any) map[string]any {
 		return nil
 	}
 	merged := make(map[string]any, len(base)+len(extra))
-	for k, v := range base {
-		merged[k] = v
-	}
-	for k, v := range extra {
-		merged[k] = v
-	}
+	maps.Copy(merged, base)
+	maps.Copy(merged, extra)
 	return merged
 }
 

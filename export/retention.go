@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"time"
 )
@@ -115,12 +116,7 @@ func matchRetentionRules(rules []RetentionRule, definition string, format Format
 }
 
 func roleMatch(role string, roles []string) bool {
-	for _, candidate := range roles {
-		if candidate == role {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(roles, role)
 }
 
 func uniqueRoles(roles []string) []string {
