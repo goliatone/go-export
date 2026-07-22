@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -494,6 +495,57 @@ func TestRouterBufferedFallback(t *testing.T) {
 	if !strings.Contains(ctx.recorder.Body.String(), "id,name") {
 		t.Fatalf("expected csv content, got %q", ctx.recorder.Body.String())
 	}
+}
+
+func TestRegisterRoutesOmitsTrailingSlashAliasesWhenRouterMatchesThemEquivalently(t *testing.T) {
+	recorder := &recordingRouteRegistrar{trailingSlashDistinct: false}
+	NewHandler(exportapi.Config{}).RegisterRoutes(recorder)
+
+	for _, route := range recorder.routes {
+		if route == "POST /admin/exports/" || route == "GET /admin/exports/" || route == "GET /admin/exports/history/" {
+			t.Fatalf("unexpected equivalent trailing-slash alias %q in %#v", route, recorder.routes)
+		}
+	}
+	for _, route := range []string{"POST /admin/exports", "GET /admin/exports", "GET /admin/exports/history"} {
+		if !slices.Contains(recorder.routes, route) {
+			t.Fatalf("missing canonical route %q in %#v", route, recorder.routes)
+		}
+	}
+}
+
+func TestRegisterRoutesKeepsTrailingSlashAliasesForDistinctRouter(t *testing.T) {
+	recorder := &recordingRouteRegistrar{trailingSlashDistinct: true}
+	NewHandler(exportapi.Config{}).RegisterRoutes(recorder)
+
+	for _, route := range []string{"POST /admin/exports/", "GET /admin/exports/", "GET /admin/exports/history/"} {
+		if !slices.Contains(recorder.routes, route) {
+			t.Fatalf("missing distinct trailing-slash route %q in %#v", route, recorder.routes)
+		}
+	}
+}
+
+type recordingRouteRegistrar struct {
+	routes                []string
+	trailingSlashDistinct bool
+}
+
+func (r *recordingRouteRegistrar) TrailingSlashDistinct() bool {
+	return r.trailingSlashDistinct
+}
+
+func (r *recordingRouteRegistrar) Get(path string, _ router.HandlerFunc, _ ...router.MiddlewareFunc) router.RouteInfo {
+	r.routes = append(r.routes, "GET "+path)
+	return nil
+}
+
+func (r *recordingRouteRegistrar) Post(path string, _ router.HandlerFunc, _ ...router.MiddlewareFunc) router.RouteInfo {
+	r.routes = append(r.routes, "POST "+path)
+	return nil
+}
+
+func (r *recordingRouteRegistrar) Delete(path string, _ router.HandlerFunc, _ ...router.MiddlewareFunc) router.RouteInfo {
+	r.routes = append(r.routes, "DELETE "+path)
+	return nil
 }
 
 type testContext struct {
