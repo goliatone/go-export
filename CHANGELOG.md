@@ -1,5 +1,26 @@
 # Changelog
 
+# [0.9.0](https://github.com/goliatone/go-export/compare/v0.8.0...v0.9.0) - (2026-07-22)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Slash fix ([119d613](https://github.com/goliatone/go-export/commit/119d6134abc58648f3016c8eaf276e1184093f24))  - (goliatone)
+- Example code ([86b122e](https://github.com/goliatone/go-export/commit/86b122e841458a7ab257560b8f4c2c3c3df3cb20))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.9.0 ([189dc83](https://github.com/goliatone/go-export/commit/189dc83f267bc9ea2a015f3d147976fd08db5c72))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.8.0 ([724aa8a](https://github.com/goliatone/go-export/commit/724aa8a8f5473b18f4301d9fce5e893eaba67472))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update deps ([f6a17bb](https://github.com/goliatone/go-export/commit/f6a17bb0499943f645e9b63641b7d5167dc663c0))  - (goliatone)
+- Update test ([6eb6082](https://github.com/goliatone/go-export/commit/6eb60824c1d221b347f74fa8e6f93c7b73ac14b5))  - (goliatone)
+- Code quality ([3eb02d5](https://github.com/goliatone/go-export/commit/3eb02d553d46f0523306bb879e36dc04135a03f1))  - (goliatone)
+
 # [0.8.0](https://github.com/goliatone/go-export/compare/v0.7.0...v0.8.0) - (2026-04-12)
 
 ## <!-- 1 -->🐛 Bug Fixes
