@@ -169,6 +169,15 @@ func (s *service) GenerateExport(ctx context.Context, actor Actor, exportID stri
 		return ExportResult{}, AsGoError(err)
 	}
 
+	// Authorize before reading progress or preparing artifact output. The runner
+	// checks again at execution, so queued work also observes current policy.
+	if err := s.authorizeExport(ctx, actor, resolved); err != nil {
+		return ExportResult{}, err
+	}
+	if err := s.authorizeDownload(ctx, actor, exportID); err != nil {
+		return ExportResult{}, err
+	}
+
 	if _, err := s.tracker.Status(ctx, exportID); err != nil {
 		record := ExportRecord{
 			ID:          exportID,
@@ -187,9 +196,7 @@ func (s *service) GenerateExport(ctx context.Context, actor Actor, exportID stri
 				},
 			},
 		}
-		if isTemplateFormat(resolved.Request.Format) {
-			record.Request = sanitizeRequestForRecord(resolved.Request)
-		}
+		record.Request = sanitizeRequestForRecord(resolved.Request)
 		_, startErr := s.tracker.Start(ctx, record)
 		if startErr != nil {
 			return ExportResult{}, AsGoError(startErr)
@@ -238,7 +245,12 @@ func (s *service) GenerateExport(ctx context.Context, actor Actor, exportID stri
 		return result, AsGoError(putResult.err)
 	}
 
-	s.updateArtifact(ctx, exportID, putResult.ref)
+	if err := s.updateArtifact(ctx, exportID, putResult.ref); err != nil {
+		return result, AsGoError(err)
+	}
+	if err := s.tracker.Complete(ctx, exportID, map[string]any{"rows": result.Rows, "bytes": result.Bytes}); err != nil {
+		return result, AsGoError(err)
+	}
 	result.Artifact = &putResult.ref
 	return result, nil
 }
@@ -476,6 +488,10 @@ func (s *service) requestSync(ctx context.Context, actor Actor, resolved Resolve
 		return ExportRecord{}, AsGoError(NewError(KindInternal, "runner is nil", nil))
 	}
 
+	if err := s.authorizeExport(ctx, actor, resolved); err != nil {
+		return ExportRecord{}, err
+	}
+
 	result, err := run.Run(ctx, resolved.Request)
 	if err != nil {
 		return ExportRecord{}, err
@@ -499,10 +515,8 @@ func (s *service) requestAsync(ctx context.Context, actor Actor, resolved Resolv
 		return ExportRecord{}, AsGoError(NewError(KindNotImpl, "progress tracker not configured", nil))
 	}
 
-	if s.guard != nil {
-		if err := s.guard.AuthorizeExport(ctx, actor, resolved.Request, resolved.Definition); err != nil {
-			return ExportRecord{}, AsGoError(NewError(KindAuthz, "export not authorized", err))
-		}
+	if err := s.authorizeExport(ctx, actor, resolved); err != nil {
+		return ExportRecord{}, err
 	}
 
 	exportID := s.nextID()
@@ -523,9 +537,7 @@ func (s *service) requestAsync(ctx context.Context, actor Actor, resolved Resolv
 			},
 		},
 	}
-	if isTemplateFormat(resolved.Request.Format) {
-		record.Request = sanitizeRequestForRecord(resolved.Request)
-	}
+	record.Request = sanitizeRequestForRecord(resolved.Request)
 
 	if s.runner != nil && s.runner.Retention != nil {
 		ttl, err := s.runner.Retention.TTL(ctx, actor, resolved.Request, resolved.Definition)
@@ -579,6 +591,23 @@ func (s *service) runnerWithActor(actor Actor) *Runner {
 	return &run
 }
 
+// authorizeExport preserves both configured service and runner policies. Guards
+// may be evaluated again by the runner and must not depend on a single call.
+func (s *service) authorizeExport(ctx context.Context, actor Actor, resolved ResolvedExport) error {
+	guards := []Guard{s.guard}
+	if s.runner != nil {
+		guards = append(guards, s.runner.Guard)
+	}
+	for _, guard := range guards {
+		if guard != nil {
+			if err := guard.AuthorizeExport(ctx, actor, resolved.Request, resolved.Definition); err != nil {
+				return AsGoError(NewError(KindAuthz, "export not authorized", err))
+			}
+		}
+	}
+	return nil
+}
+
 func (s *service) authorizeDownload(ctx context.Context, actor Actor, exportID string) error {
 	if s.guard == nil {
 		return nil
@@ -606,22 +635,24 @@ func (s *service) nextID() string {
 	return s.idGenerator()
 }
 
-func (s *service) updateArtifact(ctx context.Context, exportID string, ref ArtifactRef) {
+func (s *service) updateArtifact(ctx context.Context, exportID string, ref ArtifactRef) error {
 	if s.tracker == nil {
-		return
+		return NewError(KindNotImpl, "progress tracker not configured", nil)
 	}
 	if tracker, ok := s.tracker.(ArtifactTracker); ok {
-		_ = tracker.SetArtifact(ctx, exportID, ref)
-		return
+		return tracker.SetArtifact(ctx, exportID, ref)
 	}
 	if updater, ok := s.tracker.(RecordUpdater); ok {
 		record, err := s.tracker.Status(ctx, exportID)
 		if err != nil {
-			return
+			return err
 		}
 		record.Artifact = ref
-		_ = updater.Update(ctx, record)
+		return updater.Update(ctx, record)
 	}
+	// Metadata persistence is an optional tracker capability. The default key
+	// and store metadata remain sufficient for ordinary progress-only trackers.
+	return nil
 }
 
 type runnerTracker struct {
@@ -650,6 +681,9 @@ func (t runnerTracker) SetState(ctx context.Context, id string, state ExportStat
 	if t.base == nil {
 		return nil
 	}
+	if state == StateCompleted {
+		state = StatePublishing
+	}
 	return t.base.SetState(ctx, id, state, meta)
 }
 
@@ -664,7 +698,7 @@ func (t runnerTracker) Complete(ctx context.Context, id string, meta map[string]
 	if t.base == nil {
 		return nil
 	}
-	return t.base.Complete(ctx, id, meta)
+	return t.base.SetState(ctx, id, StatePublishing, meta)
 }
 
 func (t runnerTracker) Status(ctx context.Context, id string) (ExportRecord, error) {

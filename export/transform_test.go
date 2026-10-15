@@ -342,8 +342,12 @@ func TestRunner_BufferedTransformerLimit(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if !strings.Contains(err.Error(), "buffered transform max rows exceeded") {
-		t.Fatalf("expected limit error, got %v", err)
+	mapped := AsGoError(err)
+	if mapped.Category != errorslib.CategoryValidation || mapped.TextCode != "validation" || mapped.Message != "buffered transform max rows exceeded" {
+		t.Fatalf("expected structured max-rows validation error, got %#v", mapped)
+	}
+	if buf.Len() != 0 || !iter.closed {
+		t.Fatal("rejected buffered transform wrote output or left the source open")
 	}
 }
 

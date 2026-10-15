@@ -246,6 +246,12 @@ func (c *Controller) handleRequest(req Request, res Response) {
 		WriteError(res, err)
 		return
 	}
+	// Every submission, including idempotent reuse and custom queue adapters,
+	// must observe current export policy before metadata or scheduling work.
+	if err := c.authorizeExport(req.Context(), actor, resolved); err != nil {
+		WriteError(res, err)
+		return
+	}
 	delivery := export.SelectDelivery(resolved.Request, resolved.Definition, c.deliveryPolicyForRequest())
 
 	if delivery == export.DeliveryAsync {
@@ -253,6 +259,21 @@ func (c *Controller) handleRequest(req Request, res Response) {
 		return
 	}
 	c.handleSync(req, res, actor, resolved)
+}
+
+func (c *Controller) authorizeExport(ctx context.Context, actor export.Actor, resolved export.ResolvedExport) error {
+	guards := []export.Guard{c.guard}
+	if c.runner != nil {
+		guards = append(guards, c.runner.Guard)
+	}
+	for _, guard := range guards {
+		if guard != nil {
+			if err := guard.AuthorizeExport(ctx, actor, resolved.Request, resolved.Definition); err != nil {
+				return export.NewError(export.KindAuthz, "export not authorized", err)
+			}
+		}
+	}
+	return nil
 }
 
 func (c *Controller) decodeRequest(req Request) (export.ExportRequest, error) {
@@ -342,16 +363,6 @@ func (c *Controller) handleSync(req Request, res Response, actor export.Actor, r
 	if c.runner == nil {
 		WriteError(res, export.NewError(export.KindNotImpl, "export runner not configured", nil))
 		return
-	}
-	guard := c.guard
-	if guard == nil {
-		guard = c.runner.Guard
-	}
-	if guard != nil {
-		if err := guard.AuthorizeExport(req.Context(), actor, resolved.Request, resolved.Definition); err != nil {
-			WriteError(res, export.NewError(export.KindAuthz, "export not authorized", err))
-			return
-		}
 	}
 
 	exportID := c.nextID()
@@ -783,12 +794,14 @@ func WriteError(res Response, err error) {
 	}
 	ge := export.AsGoError(err)
 	status := statusForError(ge)
-	payload := ErrorResponse{
-		Error: ErrorBody{
-			Message: ge.Message,
-			Code:    ge.TextCode,
-		},
+	// Error.Message is diagnostic data; only the public renderer may disclose it.
+	public, renderErr := ge.ToPublicErrorResponse()
+	body := ErrorBody{Message: "An unexpected error occurred.", Code: "internal"}
+	if renderErr == nil && public.Error != nil {
+		body.Message = public.Error.Message
+		body.Code = public.Error.TextCode
 	}
+	payload := ErrorResponse{Error: body}
 	writeJSON(res, status, payload)
 }
 

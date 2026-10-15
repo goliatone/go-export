@@ -1,0 +1,5 @@
+# Guarded Group export integration fixture
+
+This nested module composes the real export HTTP adapter, SQL row source, Bun progress tracker and current native go-users Groups. Authentication is a synthetic trusted principal callback; this does not repeat INT-02's full login/session verification. Group labels remain independent of tenant/workspace. Host adapters enforce current native grants, SQL predicates before counts/selection/pages/history, safe text projection/redaction and scoped operational activity. The package's service guard and safe public errors are runtime fixes; host policies remain application responsibilities.
+
+Use the portable evidence reproduce.py with the recorded dependency snapshots and Go toolchain. Root go test ./... excludes this nested module. The fixture requires a coordinated workspace for the recorded native Group source; standalone module resolution is not the verified graph. SQLite is disposable by default. PostgreSQL requires EXPORT_POSTGRES_DSN and EXPORT_POSTGRES_DISPOSABLE=1 pointing only to an owned disposable database. No dependency downloads, private application, deployment or external delivery is involved.

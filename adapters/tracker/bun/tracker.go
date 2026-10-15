@@ -16,6 +16,7 @@ import (
 // Tracker stores export progress in a Bun-backed database.
 type Tracker struct {
 	DB          *bun.DB
+	tx          bun.IDB
 	Now         func() time.Time
 	IDGenerator func() string
 }
@@ -44,7 +45,7 @@ func (t *Tracker) Start(ctx context.Context, record export.ExportRecord) (string
 	if err != nil {
 		return "", err
 	}
-	_, err = t.DB.NewInsert().Model(&model).Exec(ctx)
+	_, err = t.boundDB().NewInsert().Model(&model).Exec(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -61,7 +62,7 @@ func (t *Tracker) Advance(ctx context.Context, id string, delta export.ProgressD
 		return export.NewError(export.KindValidation, "export ID is required", nil)
 	}
 
-	query := t.DB.NewUpdate().Model((*recordModel)(nil)).
+	query := t.boundDB().NewUpdate().Model((*recordModel)(nil)).
 		Set("counts_processed = counts_processed + ?", delta.Rows).
 		Set("bytes_written = bytes_written + ?", delta.Bytes).
 		Where("id = ?", id)
@@ -86,7 +87,7 @@ func (t *Tracker) SetState(ctx context.Context, id string, state export.ExportSt
 		return export.NewError(export.KindValidation, "export ID is required", nil)
 	}
 
-	query := t.DB.NewUpdate().Model((*recordModel)(nil)).
+	query := t.boundDB().NewUpdate().Model((*recordModel)(nil)).
 		Set("state = ?", state).
 		Where("id = ?", id)
 	if state == export.StateRunning {
@@ -118,7 +119,7 @@ func (t *Tracker) Fail(ctx context.Context, id string, err error, meta map[strin
 		return export.NewError(export.KindValidation, "export ID is required", nil)
 	}
 
-	res, err := t.DB.NewUpdate().Model((*recordModel)(nil)).
+	res, err := t.boundDB().NewUpdate().Model((*recordModel)(nil)).
 		Set("state = ?", export.StateFailed).
 		Set("completed_at = COALESCE(completed_at, ?)", t.now()).
 		Where("id = ?", id).
@@ -142,7 +143,7 @@ func (t *Tracker) Complete(ctx context.Context, id string, meta map[string]any) 
 		return export.NewError(export.KindValidation, "export ID is required", nil)
 	}
 
-	query := t.DB.NewUpdate().Model((*recordModel)(nil)).
+	query := t.boundDB().NewUpdate().Model((*recordModel)(nil)).
 		Set("state = ?", export.StateCompleted).
 		Set("completed_at = COALESCE(completed_at, ?)", t.now()).
 		Where("id = ?", id)
@@ -174,7 +175,7 @@ func (t *Tracker) Status(ctx context.Context, id string) (export.ExportRecord, e
 	}
 
 	model := new(recordModel)
-	err := t.DB.NewSelect().Model(model).Where("id = ?", id).Limit(1).Scan(ctx)
+	err := t.boundDB().NewSelect().Model(model).Where("id = ?", id).Limit(1).Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return export.ExportRecord{}, export.NewError(export.KindNotFound, fmt.Sprintf("export %q not found", id), nil)
@@ -191,7 +192,7 @@ func (t *Tracker) List(ctx context.Context, filter export.ProgressFilter) ([]exp
 	}
 
 	models := make([]recordModel, 0)
-	query := t.DB.NewSelect().Model(&models)
+	query := t.boundDB().NewSelect().Model(&models)
 	if filter.Definition != "" {
 		query = query.Where("definition = ?", filter.Definition)
 	}
@@ -234,7 +235,7 @@ func (t *Tracker) SetArtifact(ctx context.Context, id string, ref export.Artifac
 	if err != nil {
 		return err
 	}
-	query := t.DB.NewUpdate().Model((*recordModel)(nil)).
+	query := t.boundDB().NewUpdate().Model((*recordModel)(nil)).
 		Set("artifact_key = ?", ref.Key).
 		Set("artifact_meta = ?", meta).
 		Where("id = ?", id)
@@ -266,7 +267,7 @@ func (t *Tracker) Update(ctx context.Context, record export.ExportRecord) error 
 		return err
 	}
 
-	res, err := t.DB.NewUpdate().Model(&model).Where("id = ?", record.ID).Exec(ctx)
+	res, err := t.boundDB().NewUpdate().Model(&model).Where("id = ?", record.ID).Exec(ctx)
 	if err != nil {
 		return err
 	}
@@ -286,7 +287,7 @@ func (t *Tracker) Delete(ctx context.Context, id string) error {
 		return export.NewError(export.KindValidation, "export ID is required", nil)
 	}
 
-	res, err := t.DB.NewDelete().Model((*recordModel)(nil)).Where("id = ?", id).Exec(ctx)
+	res, err := t.boundDB().NewDelete().Model((*recordModel)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {
 		return err
 	}
@@ -450,4 +451,20 @@ func defaultIDGenerator() func() string {
 		id := atomic.AddUint64(&counter, 1)
 		return fmt.Sprintf("exp-%d", id)
 	}
+}
+
+// WithTx binds every tracker operation to the caller-owned transaction.
+func (t *Tracker) WithTx(tx bun.Tx) *Tracker {
+	if t == nil {
+		return nil
+	}
+	next := *t
+	next.tx = tx
+	return &next
+}
+func (t *Tracker) boundDB() bun.IDB {
+	if t.tx != nil {
+		return t.tx
+	}
+	return t.DB
 }

@@ -59,3 +59,4 @@ go.work
 .claude
 docs/*
 !docs/GUIDE_*.md
+evidence

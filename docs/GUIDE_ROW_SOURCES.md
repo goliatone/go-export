@@ -870,3 +870,11 @@ func (s *PooledSource) Open(ctx context.Context, spec export.RowSourceSpec) (exp
 - [GUIDE_RENDERERS.md](GUIDE_RENDERERS.md) - Output format renderers
 - [GUIDE_DELIVERY.md](GUIDE_DELIVERY.md) - Sync and async delivery modes
 - [GUIDE_AUTHORIZATION.md](GUIDE_AUTHORIZATION.md) - Implement export guards
+
+## Guarded Group row sources
+
+`RowSource.Open` receives the trusted actor and resolved columns; it does not infer authorization or Group predicates. For Group-only applications, preserve the Group independently of tenant/workspace. Derive it from validated host context, match it to actor metadata and enforce current native Group grants before source access. Ignore or reject payload attempts to replace the trusted Group.
+
+Apply the bound Group predicate in SQL before `COUNT`, explicit-ID selection, sorting, `LIMIT` and `OFFSET`. Mixed selections must never broaden that predicate. The same rule applies to tracker history and direct-ID metadata; guard history before listing, and filter the metadata query before paging or record hydration. The native tracker stores arbitrary actor details, so a host wrapper can bind and filter its Group without adding a second scope model.
+
+Apply allowed-column/redaction policy and an explicit safe text/projection transform before rendering. The fixture under `tests/scopedexport` verifies native HTTP CSV/JSON/XLSX output, bound SQL counts/pages, current grants, direct artifact denial, and canonical Group activity through a host-owned sanitizing projector. It uses synthetic authenticated context; complete authentication/session verification remains separately covered by INT-02. Streaming already emitted bytes cannot be recalled, and these checks do not claim continuous revocation, snapshot consistency or reliable audit delivery.

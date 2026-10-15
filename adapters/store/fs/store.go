@@ -53,6 +53,12 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, meta export.Ar
 		return export.ArtifactRef{}, export.NewError(export.KindValidation, "artifact key is required", nil)
 	}
 
+	if _, err := json.Marshal(meta); err != nil {
+		return export.ArtifactRef{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return export.ArtifactRef{}, err
+	}
 	pathOnDisk, err := s.resolvePath(key)
 	if err != nil {
 		return export.ArtifactRef{}, err
