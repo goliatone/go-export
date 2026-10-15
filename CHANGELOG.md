@@ -1,5 +1,19 @@
 # Changelog
 
+# [0.10.0](https://github.com/goliatone/go-export/compare/v0.9.0...v0.10.0) - (2026-10-15)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Export auth, guards, and durable fs storage ([d18e556](https://github.com/goliatone/go-export/commit/d18e5567f58e4f6dbfc7fd96ff337e4c31f65ad4))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.10.0 ([1bd8bff](https://github.com/goliatone/go-export/commit/1bd8bff3988d51b6c867cb0a2fc3e32322a087ed))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.9.0 ([20f9703](https://github.com/goliatone/go-export/commit/20f9703a3f871ef9c089ba77a79e668be1e18d9e))  - (goliatone)
+
 # [0.9.0](https://github.com/goliatone/go-export/compare/v0.8.0...v0.9.0) - (2026-07-22)
 
 ## <!-- 1 -->🐛 Bug Fixes
