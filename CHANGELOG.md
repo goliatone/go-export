@@ -1,5 +1,23 @@
 # Changelog
 
+# [0.11.0](https://github.com/goliatone/go-export/compare/v0.10.0...v0.11.0) - (2026-10-16)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.11.0 ([ccfb849](https://github.com/goliatone/go-export/commit/ccfb849e9d8c047afe92f161807a09551995ec39))  - (goliatone)
+
+## <!-- 16 -->➕ Add
+
+- Webhooks, jobs, and scheduled jobs ([61b9684](https://github.com/goliatone/go-export/commit/61b96845db080210d4d2f5ad93201e70439626c6))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.10.0 ([4e7e507](https://github.com/goliatone/go-export/commit/4e7e507ed7270013f2071696f2e8b3f593dcd871))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update deps ([a399f36](https://github.com/goliatone/go-export/commit/a399f3607750286a9146090304d286ba8c7c613c))  - (goliatone)
+
 # [0.10.0](https://github.com/goliatone/go-export/compare/v0.9.0...v0.10.0) - (2026-10-15)
 
 ## <!-- 1 -->🐛 Bug Fixes
