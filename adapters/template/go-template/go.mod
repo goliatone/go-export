@@ -3,7 +3,7 @@ module github.com/goliatone/go-export/adapters/template/go-template
 go 1.26.0
 
 require (
-	github.com/goliatone/go-export v0.10.0
+	github.com/goliatone/go-export v0.11.0
 	github.com/goliatone/go-template v0.3.1
 )
 
