@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/goliatone/go-export/adapters/exportapi"
 	exporthttp "github.com/goliatone/go-export/adapters/http"
@@ -52,6 +53,7 @@ func (it *stubIterator) Close() error { return nil }
 func newTestRunner(t *testing.T) *export.Runner {
 	t.Helper()
 	runner := export.NewRunner()
+	runner.Now = func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) }
 	if err := runner.Definitions.Register(export.ExportDefinition{
 		Name:         "users",
 		Resource:     "users",
@@ -93,6 +95,7 @@ func newTestService(runner *export.Runner, id string) (export.Service, export.Pr
 	store := export.NewMemoryStore()
 	svc := export.NewService(export.ServiceConfig{
 		Runner:         runner,
+		Now:            runner.Now,
 		Tracker:        tracker,
 		Store:          store,
 		DeliveryPolicy: export.DeliveryPolicy{Default: export.DeliveryAsync},

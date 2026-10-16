@@ -27,6 +27,17 @@ type Config struct {
 	Namespace       func(context.Context, export.Actor) (string, error)
 	TTL             time.Duration
 	WithTransaction func(context.Context, export.Actor, func(context.Context, bun.Tx) error) error
+	// Enqueue persists a new async record's executable delivery in this same
+	// transaction. It must not perform external I/O or commit the transaction.
+	// Replays do not enqueue again; any error rolls back record and replay key.
+	Enqueue func(context.Context, bun.Tx, export.Actor, export.ExportRecord) error
+	// OnQueued captures transaction-local work for a new async record before
+	// Enqueue. Replayed submissions do not invoke it. Errors roll back acceptance.
+	OnQueued func(context.Context, bun.Tx, export.Actor, export.ExportRecord) error
+	// OnCompleted publishes transaction-local work after durable artifact and
+	// completed tracking, before commit. Completed generation replay skips it.
+	// Hooks must use this same transaction, never commit or perform network I/O.
+	OnCompleted func(context.Context, bun.Tx, export.Actor, export.ExportRecord) error
 }
 
 // Service retains the ordinary service API; only async replay and generation
@@ -133,7 +144,7 @@ func (b *eventBuffer) Emit(_ context.Context, e export.ChangeEvent) error {
 func (s *Service) bound(tx bun.Tx, b *eventBuffer, id string) export.Service {
 	cfg := s.cfg.Service
 	r := *cfg.Runner
-	r.Tracker = s.cfg.Tracker.WithTx(tx)
+	r.Tracker = &transactionTracker{Tracker: s.cfg.Tracker.WithTx(tx)}
 	r.Emitter = b
 	cfg.Runner = &r
 	cfg.Tracker = r.Tracker
@@ -160,20 +171,39 @@ func (s *Service) RequestExport(ctx context.Context, a export.Actor, req export.
 	if e != nil {
 		return export.ExportRecord{}, export.AsGoError(e)
 	}
-	if export.SelectDelivery(r.Request, r.Definition, s.cfg.Service.DeliveryPolicy) != export.DeliveryAsync || req.IdempotencyKey == "" {
+	if export.SelectDelivery(r.Request, r.Definition, s.cfg.Service.DeliveryPolicy) != export.DeliveryAsync {
 		return s.Service.RequestExport(ctx, a, req)
 	}
-	ns, e := s.cfg.Namespace(ctx, a)
-	if e != nil || ns == "" {
-		return export.ExportRecord{}, export.AsGoError(export.NewError(export.KindAuthz, "replay scope unavailable", e))
-	}
-	sig, e := replaySignature(a, r.Request)
-	if e != nil {
-		return export.ExportRecord{}, export.AsGoError(e)
+	var ns, sig string
+	if req.IdempotencyKey != "" {
+		ns, e = s.cfg.Namespace(ctx, a)
+		if e != nil || ns == "" {
+			return export.ExportRecord{}, export.AsGoError(export.NewError(export.KindAuthz, "replay scope unavailable", e))
+		}
+		sig, e = replaySignature(a, r.Request)
+		if e != nil {
+			return export.ExportRecord{}, export.AsGoError(e)
+		}
 	}
 	var result export.ExportRecord
 	b := new(eventBuffer)
 	e = s.transact(ctx, a, func(ctx context.Context, tx bun.Tx) error {
+		queueNew := func(id string) error {
+			canonical := r.Request
+			canonical.Delivery = export.DeliveryAsync
+			var err error
+			result, err = s.bound(tx, b, id).RequestExport(ctx, a, canonical)
+			if err == nil && s.cfg.OnQueued != nil {
+				err = s.cfg.OnQueued(ctx, tx, a, result)
+			}
+			if err == nil && s.cfg.Enqueue != nil {
+				err = s.cfg.Enqueue(ctx, tx, a, result)
+			}
+			return err
+		}
+		if req.IdempotencyKey == "" {
+			return queueNew("")
+		}
 		key := reservation{Namespace: ns, Signature: sig, ExportID: uuid.NewString(), ExpiresAt: s.now().Add(s.cfg.TTL)}
 		res, e := tx.NewInsert().Model(&key).On("CONFLICT (namespace, signature) DO NOTHING").Exec(ctx)
 		if e != nil {
@@ -208,10 +238,7 @@ func (s *Service) RequestExport(ctx context.Context, a export.Actor, req export.
 			}
 			return nil
 		}
-		canonical := r.Request
-		canonical.Delivery = export.DeliveryAsync
-		result, e = s.bound(tx, b, key.ExportID).RequestExport(ctx, a, canonical)
-		return e
+		return queueNew(key.ExportID)
 	})
 	if e != nil {
 		return export.ExportRecord{}, export.AsGoError(e)
@@ -275,6 +302,16 @@ func (s *Service) GenerateExport(ctx context.Context, a export.Actor, id string,
 			return e
 		}
 		result, e = s.bound(tx, b, "").GenerateExport(ctx, a, id, rec.Request)
+		if e == nil && s.cfg.OnCompleted != nil {
+			completed, err := tr.Status(ctx, id)
+			if err != nil {
+				return err
+			}
+			if completed.State != export.StateCompleted {
+				return export.NewError(export.KindInternal, "completed export required for publication", nil)
+			}
+			e = s.cfg.OnCompleted(ctx, tx, a, completed)
+		}
 		return e
 	})
 	if e != nil {
