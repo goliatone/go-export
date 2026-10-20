@@ -3,8 +3,8 @@ module example.com/guarded-scoped-export-verification
 go 1.27.2
 
 require (
-	github.com/goliatone/go-export v0.10.0
-	github.com/goliatone/go-users v0.27.2
+	github.com/goliatone/go-export v0.11.0
+	github.com/goliatone/go-users v0.27.3
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/uptrace/bun v1.2.18
@@ -47,7 +47,7 @@ require (
 	github.com/goliatone/go-masker v0.2.0 // indirect
 	github.com/goliatone/go-print v0.4.1 // indirect
 	github.com/goliatone/go-repository-bun v0.16.2 // indirect
-	github.com/goliatone/go-router v0.62.4 // indirect
+	github.com/goliatone/go-router v0.62.5 // indirect
 	github.com/goliatone/go-slug v0.1.0 // indirect
 	github.com/goliatone/hashid v0.2.3 // indirect
 	github.com/goodsign/monday v1.0.2 // indirect
