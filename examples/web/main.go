@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,15 +11,22 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/goliatone/go-export/examples/web/config"
 	"github.com/goliatone/go-router"
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	ctx := context.Background()
 
 	// Load configuration
@@ -171,40 +179,55 @@ func main() {
 	// Create application
 	app, err := NewApp(ctx, cfg)
 	if err != nil {
-		log.Fatalf("failed to create app: %v", err)
+		return fmt.Errorf("create app: %w", err)
 	}
 	defer app.Close()
 
 	// Build server
 	srv, err := buildServer(app)
 	if err != nil {
-		log.Fatalf("failed to build server: %v", err)
+		return fmt.Errorf("build server: %w", err)
 	}
 
 	// Setup routes
 	app.SetupRoutes(srv.Router())
 
-	// Start server
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
-	go func() {
-		log.Printf("Starting server on http://%s", addr)
-		log.Printf("Export API: http://%s/admin/exports", addr)
-		log.Printf("Export History: http://%s/admin/exports/history", addr)
-		log.Printf("Demo UI: http://%s/", addr)
-		log.Printf("Formats: csv, json, ndjson, xlsx, sqlite (template/pdf optional)")
-		if err := srv.Serve(addr); err != nil {
-			log.Fatalf("server error: %v", err)
+	log.Printf("Starting server on http://%s", addr)
+	log.Printf("Export API: http://%s/admin/exports", addr)
+	log.Printf("Export History: http://%s/admin/exports/history", addr)
+	log.Printf("Demo UI: http://%s/", addr)
+	log.Printf("Formats: csv, json, ndjson, xlsx, sqlite (template/pdf optional)")
+	shutdown, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	return serve(shutdown, app, srv, addr, 10*time.Second)
+}
+
+func serve(ctx context.Context, app *App, srv router.Server[*fiber.App], addr string, timeout time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(addr) }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		var socketErr error
+		if app != nil {
+			socketErr = app.InboxHub.Shutdown(shutdownCtx)
 		}
-	}()
-
-	// Wait for shutdown signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	log.Println("Shutting down server...")
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("shutdown error: %v", err)
+		if err := errors.Join(socketErr, srv.Shutdown(shutdownCtx)); err != nil {
+			return err
+		}
+		select {
+		case err := <-done:
+			return err
+		case <-shutdownCtx.Done():
+			return shutdownCtx.Err()
+		}
 	}
 }
 
@@ -229,13 +252,15 @@ func buildServer(app *App) (router.Server[*fiber.App], error) {
 		WithDebug(true).
 		WithFunctions(templateFunctions())
 
-	engine, err := router.InitializeViewEngine(viewCfg)
+	engine, err := router.InitializeFiberV3ViewEngine(viewCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize view engine: %w", err)
 	}
 
 	// Create Fiber adapter
-	srv := router.NewFiberAdapter(fiberAppInitializer(engine))
+	srv := router.NewFiberV3AdapterWithConfig(router.FiberV3AdapterConfig{
+		ListenConfig: fiber.ListenConfig{EnablePrintRoutes: true},
+	}, fiberAppInitializer(engine))
 
 	return srv, nil
 }
@@ -246,7 +271,6 @@ func fiberAppInitializer(engine fiber.Views) func(*fiber.App) *fiber.App {
 			AppName:           "Go Export Demo",
 			PassLocalsToViews: true,
 			Views:             engine,
-			EnablePrintRoutes: true,
 		})
 
 		// Add middleware
@@ -254,9 +278,9 @@ func fiberAppInitializer(engine fiber.Views) func(*fiber.App) *fiber.App {
 			Format: "[${time}] ${status} ${method} ${path} ${latency}\n",
 		}))
 		fiberApp.Use(cors.New(cors.Config{
-			AllowOrigins: "*",
-			AllowMethods: "GET,POST,DELETE,PATCH,OPTIONS",
-			AllowHeaders: "Content-Type,Authorization,X-Idempotency-Key",
+			AllowOrigins: []string{"*"},
+			AllowMethods: []string{"GET", "POST", "DELETE", "PATCH", "OPTIONS"},
+			AllowHeaders: []string{"Content-Type", "Authorization", "X-Idempotency-Key"},
 		}))
 
 		return fiberApp

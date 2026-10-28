@@ -137,8 +137,9 @@ func (a *App) InboxSocket() func(router.WebSocketContext) error {
 
 		client := a.InboxHub.Add(userID, ws)
 		if client == nil {
-			return nil
+			return ws.CloseWithStatus(router.CloseServiceRestart, "server shutting down")
 		}
+		defer a.InboxHub.readers.Done()
 		defer a.InboxHub.Remove(userID, ws)
 
 		if a.Inbox != nil {

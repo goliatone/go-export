@@ -157,8 +157,8 @@ github.com/goliatone/go-logger v0.10.1 h1:Ir8j/d5nttxRVkjfqYWhPzRSwLpKWhps/l59QG
 github.com/goliatone/go-logger v0.10.1/go.mod h1:hWv7Tj+af3E0vjJIHR52JmmK3jKk6rCKFtvhCC/3jXE=
 github.com/goliatone/go-masker v0.2.0 h1:M+Xx+AVJqTpNCQNPrPgVL6ft7oao5oT+/jQ+G8XCYVg=
 github.com/goliatone/go-masker v0.2.0/go.mod h1:n+AV93IO1rNI35kjbjfV1gMkjuIOSDVEzfhABTlCf4U=
-github.com/goliatone/go-notifications v0.16.2 h1:SWU18VTrI6fQOtQ3Z6sIEszutqB1dr2IyRXvkGX126s=
-github.com/goliatone/go-notifications v0.16.2/go.mod h1:3s8Ok2824rrsZ6f0ieKyjQEczizR1VdqijIhSIU6QuY=
+github.com/goliatone/go-notifications v0.16.3 h1:NcYecrT/DpF+r8YW7E7QhqGAR+SoJNcGbRJwb42P3xA=
+github.com/goliatone/go-notifications v0.16.3/go.mod h1:f2tL2psJWPlWY4Rak1CVjbblX1G0vlr8pSD72vk2CV0=
 github.com/goliatone/go-options v0.7.2 h1:sQJ3CvqarraGflRkkL1ve+/3qdDbehmKYgkcdJrb6+U=
 github.com/goliatone/go-options v0.7.2/go.mod h1:oSxNI/UybEEWOQMJzR4U4xNCstJg9uxsipQvOOYYrUs=
 github.com/goliatone/go-persistence-bun v0.17.1 h1:t4RFp2g7CFxYSWtOWYXgu8bpedEgDEVV+FC8MBntTSY=

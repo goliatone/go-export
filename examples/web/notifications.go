@@ -96,6 +96,8 @@ func setupExportReadyNotifier(ctx context.Context, logger *SimpleLogger, cfg con
 	}
 
 	registry := adapters.NewRegistry(buildNotificationAdapters(logSink, cfg)...)
+	dispatcherCfg := notifconfig.Defaults().Dispatcher
+	dispatcherCfg.EnvFallbackAllowlist = cfg.Recipients
 	manager, err := notifier.New(notifier.Dependencies{
 		Definitions: providers.Definitions,
 		Events:      providers.Events,
@@ -104,10 +106,8 @@ func setupExportReadyNotifier(ctx context.Context, logger *SimpleLogger, cfg con
 		Templates:   tplSvc,
 		Adapters:    registry,
 		Logger:      logSink,
-		Config: notifconfig.DispatcherConfig{
-			EnvFallbackAllowlist: cfg.Recipients,
-		},
-		Inbox: inboxSvc,
+		Config:      dispatcherCfg,
+		Inbox:       inboxSvc,
 	})
 	if err != nil {
 		return notificationSetup{}, err

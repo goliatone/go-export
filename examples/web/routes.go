@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	exportrouter "github.com/goliatone/go-export/adapters/router"
 	"github.com/goliatone/go-export/export"
 	"github.com/goliatone/go-router"

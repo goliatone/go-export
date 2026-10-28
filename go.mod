@@ -6,12 +6,12 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20260405000525-47a8ff65b46a
 	github.com/chromedp/chromedp v0.15.1
 	github.com/flosch/pongo2/v6 v6.1.0
-	github.com/gofiber/fiber/v2 v2.52.13
+	github.com/gofiber/fiber/v3 v3.6.1
 	github.com/goliatone/go-command v0.24.3
 	github.com/goliatone/go-errors v0.12.0
 	github.com/goliatone/go-i18n v0.5.0
 	github.com/goliatone/go-job v0.20.0
-	github.com/goliatone/go-notifications v0.16.2
+	github.com/goliatone/go-notifications v0.16.3
 	github.com/goliatone/go-router v0.63.2
 	github.com/goliatone/go-users v0.27.4
 	github.com/google/uuid v1.6.0
@@ -24,7 +24,7 @@ require (
 require (
 	github.com/flosch/pongo2/v7 v7.0.0-alpha.1.0.20260313142248-c0f82578df57 // indirect
 	github.com/gofiber/contrib/v3/websocket v1.2.9 // indirect
-	github.com/gofiber/fiber/v3 v3.6.1 // indirect
+	github.com/gofiber/fiber/v2 v2.52.13 // indirect
 	github.com/gofiber/schema v1.9.0 // indirect
 	github.com/gofiber/template/v2 v2.1.4 // indirect
 	github.com/gofiber/utils/v2 v2.6.2 // indirect
@@ -87,7 +87,7 @@ require (
 	github.com/goodsign/monday v1.0.2 // indirect
 	github.com/google/cel-go v0.30.0 // indirect
 	github.com/google/pprof v0.0.0-20251208000136-3d256cb9ff16 // indirect
-	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4 // indirect
+	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/jaytaylor/html2text v0.0.0-20230321000545-74c2419ad056 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect

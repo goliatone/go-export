@@ -12,10 +12,12 @@ import (
 )
 
 type inboxHub struct {
-	mu      sync.RWMutex
-	clients map[string]map[string]*inboxClient
-	inbox   *inbox.Service
-	logger  *SimpleLogger
+	mu       sync.RWMutex
+	clients  map[string]map[string]*inboxClient
+	inbox    *inbox.Service
+	logger   *SimpleLogger
+	stopping bool
+	readers  sync.WaitGroup
 }
 
 type inboxClient struct {
@@ -57,6 +59,11 @@ func (h *inboxHub) Add(userID string, conn router.WebSocketContext) *inboxClient
 	connID := conn.ConnectionID()
 
 	h.mu.Lock()
+	if h.stopping {
+		h.mu.Unlock()
+		return nil
+	}
+	h.readers.Add(1)
 	if h.clients == nil {
 		h.clients = make(map[string]map[string]*inboxClient)
 	}
@@ -107,6 +114,7 @@ func (h *inboxHub) broadcastToUser(userID string, msg inboxRealtimeMessage) erro
 			if firstErr == nil {
 				firstErr = err
 			}
+			interruptInboxRead(client.conn)
 			h.removeConn(userID, client.conn.ConnectionID())
 		}
 	}
@@ -198,3 +206,38 @@ func inboxUserIDFromPayload(payload any) string {
 }
 
 var _ broadcaster.Broadcaster = (*inboxHub)(nil)
+
+// Shutdown prevents new readers and joins existing readers before HTTP shutdown.
+func (h *inboxHub) Shutdown(ctx context.Context) error {
+	if h == nil {
+		return nil
+	}
+	h.mu.Lock()
+	h.stopping = true
+	var clients []*inboxClient
+	for _, connections := range h.clients {
+		for _, client := range connections {
+			clients = append(clients, client)
+		}
+	}
+	h.mu.Unlock()
+	for _, client := range clients {
+		interruptInboxRead(client.conn)
+	}
+	done := make(chan struct{})
+	go func() { h.readers.Wait(); close(done) }()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func interruptInboxRead(conn router.WebSocketContext) {
+	if interrupter, ok := conn.(router.WebSocketReadInterrupter); ok {
+		_ = interrupter.InterruptRead()
+	} else {
+		_ = conn.Close()
+	}
+}

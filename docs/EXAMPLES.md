@@ -1,5 +1,11 @@
 # Examples
 
+## Fiber v3 web demo
+
+With Go 1.26.0 or newer, run `cd examples/web && go run .` and open http://localhost:8080. `HOST` and `PORT` override the listener. The example uses go-router v0.63.2 with explicit Fiber v3 adapters, native v3 logger/CORS and scoped Pongo2 v7 HTTP views. Its document-export templates continue to use the independent Pongo2 v6 renderer.
+
+SIGINT/SIGTERM interrupts and joins owned inbox WebSocket readers, then drains HTTP requests within a shared ten-second deadline. Startup failures return immediately. From the repository root, run `go test ./examples/web ./adapters/router` and `go vet ./examples/web ./adapters/router`.
+
 ## Sync CSV export (callback row source)
 ```go
 runner := export.NewRunner()

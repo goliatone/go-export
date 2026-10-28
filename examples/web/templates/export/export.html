@@ -152,7 +152,7 @@
             {% for row in Rows %}
             <tr>
                 {% for col in Schema.Columns %}
-                <td>{{ row[col.Name] }}</td>
+                <td>{{ row[forloop.Counter0] }}</td>
                 {% endfor %}
             </tr>
             {% empty %}
