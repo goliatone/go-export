@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/goliatone/go-export v0.11.2
-	github.com/goliatone/go-users v0.27.5
+	github.com/goliatone/go-users v0.27.6
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/uptrace/bun v1.2.18
