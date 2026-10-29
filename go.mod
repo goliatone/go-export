@@ -11,9 +11,9 @@ require (
 	github.com/goliatone/go-errors v0.12.0
 	github.com/goliatone/go-i18n v0.5.0
 	github.com/goliatone/go-job v0.20.0
-	github.com/goliatone/go-notifications v0.16.3
-	github.com/goliatone/go-router v0.63.2
-	github.com/goliatone/go-users v0.27.4
+	github.com/goliatone/go-notifications v0.16.4
+	github.com/goliatone/go-router v0.63.3
+	github.com/goliatone/go-users v0.27.5
 	github.com/google/uuid v1.6.0
 	github.com/uptrace/bun v1.2.18
 	github.com/uptrace/bun/dialect/sqlitedialect v1.2.18
@@ -128,7 +128,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.42.0 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
