@@ -76,7 +76,7 @@ func (s StreamingStrategy) Render(ctx context.Context, tmpl TemplateExecutor, na
 
 	rowsCh := make(chan export.Row)
 	errCh := make(chan error, 1)
-	var rowCount int64
+	var rowCount atomic.Int64
 	done := make(chan struct{})
 
 	go func() {
@@ -106,7 +106,7 @@ func (s StreamingStrategy) Render(ctx context.Context, tmpl TemplateExecutor, na
 				}
 				return
 			}
-			atomic.AddInt64(&rowCount, 1)
+			rowCount.Add(1)
 			select {
 			case <-done:
 				return
@@ -139,7 +139,7 @@ func (s StreamingStrategy) Render(ctx context.Context, tmpl TemplateExecutor, na
 	}
 
 	return export.RenderStats{
-		Rows:  atomic.LoadInt64(&rowCount),
+		Rows:  rowCount.Load(),
 		Bytes: cw.count,
 	}, nil
 }

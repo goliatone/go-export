@@ -56,7 +56,7 @@ func (s *DurableStore) root(key string) (*os.Root, error) {
 	if key == "." || !fs.ValidPath(key) || strings.Contains(key, "\\") {
 		return nil, export.NewError(export.KindValidation, "invalid artifact key", nil)
 	}
-	for _, part := range strings.Split(key, "/") {
+	for part := range strings.SplitSeq(key, "/") {
 		if strings.HasPrefix(part, ".export-tmp-") {
 			return nil, export.NewError(export.KindValidation, "reserved artifact key", nil)
 		}

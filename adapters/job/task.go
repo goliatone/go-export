@@ -336,12 +336,10 @@ func defaultRetryable(err error) bool {
 	if errorslib.IsRetryableError(err) {
 		return true
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) {
+	if netErr, ok := errors.AsType[net.Error](err); ok {
 		return netErr.Timeout() || netErr.Temporary()
 	}
-	var exportErr *export.ExportError
-	if errors.As(err, &exportErr) {
+	if exportErr, ok := errors.AsType[*export.ExportError](err); ok {
 		switch exportErr.Kind {
 		case export.KindTimeout, export.KindInternal:
 			return true

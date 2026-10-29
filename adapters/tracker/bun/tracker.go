@@ -446,9 +446,9 @@ func (t *Tracker) nextID() string {
 }
 
 func defaultIDGenerator() func() string {
-	var counter uint64
+	var counter atomic.Uint64
 	return func() string {
-		id := atomic.AddUint64(&counter, 1)
+		id := counter.Add(1)
 		return fmt.Sprintf("exp-%d", id)
 	}
 }

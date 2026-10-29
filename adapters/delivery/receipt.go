@@ -24,7 +24,7 @@ type WebhookReceipt struct {
 	ID          string    `json:"id"`
 	ExportID    string    `json:"export_id"`
 	TargetID    string    `json:"target_id"`
-	DeliveredAt time.Time `json:"delivered_at,omitempty"`
+	DeliveredAt time.Time `json:"delivered_at"`
 }
 
 // WebhookTargetSpec is a stable application target identity and its authorized endpoint.

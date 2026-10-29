@@ -756,7 +756,7 @@ func addStructFields(ctx pongo2.Context, value reflect.Value) {
 		ctx[field.Name] = fieldValue.Interface()
 
 		if tag := field.Tag.Get("json"); tag != "" {
-			name := strings.Split(tag, ",")[0]
+			name, _, _ := strings.Cut(tag, ",")
 			if name != "" && name != "-" {
 				if _, exists := ctx[name]; !exists {
 					ctx[name] = fieldValue.Interface()

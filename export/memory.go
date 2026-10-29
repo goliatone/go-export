@@ -81,7 +81,7 @@ func (s *MemoryStore) SignedURL(ctx context.Context, key string, ttl time.Durati
 type MemoryTracker struct {
 	mu      sync.RWMutex
 	records map[string]ExportRecord
-	counter uint64
+	counter atomic.Uint64
 }
 
 // NewMemoryTracker creates an in-memory tracker.
@@ -268,6 +268,6 @@ func (t *MemoryTracker) List(ctx context.Context, filter ProgressFilter) ([]Expo
 }
 
 func (t *MemoryTracker) nextID() string {
-	id := atomic.AddUint64(&t.counter, 1)
+	id := t.counter.Add(1)
 	return fmt.Sprintf("exp-%d", id)
 }

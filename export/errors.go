@@ -50,16 +50,14 @@ func AsGoError(err error) *errorslib.Error {
 		return nil
 	}
 
-	var ge *errorslib.Error
-	if errors.As(err, &ge) {
+	if ge, ok := errors.AsType[*errorslib.Error](err); ok {
 		return ge
 	}
 
 	kind := KindInternal
 	msg := err.Error()
 
-	var exportErr *ExportError
-	if errors.As(err, &exportErr) {
+	if exportErr, ok := errors.AsType[*ExportError](err); ok {
 		kind = exportErr.Kind
 		if exportErr.Msg != "" {
 			msg = exportErr.Msg
@@ -99,8 +97,7 @@ func KindFromError(err error) ErrorKind {
 		return ""
 	}
 
-	var exportErr *ExportError
-	if errors.As(err, &exportErr) {
+	if exportErr, ok := errors.AsType[*ExportError](err); ok {
 		return exportErr.Kind
 	}
 

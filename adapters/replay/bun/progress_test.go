@@ -55,7 +55,7 @@ func TestTransactionProgressFlushAndFailure(t *testing.T) {
 	}
 	e = db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		tr := &transactionTracker{Tracker: svc.cfg.Tracker.WithTx(tx)}
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			if e := tr.Advance(ctx, rec.ID, export.ProgressDelta{Rows: 1, Bytes: 8}, nil); e != nil {
 				return e
 			}

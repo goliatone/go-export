@@ -233,9 +233,8 @@ func TestReceiverAtomicEffectConflictAndConcurrency(t *testing.T) {
 	}
 	var wg sync.WaitGroup
 	errs := make(chan error, 8)
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() { defer wg.Done(); errs <- r.Receive(ctx, "trusted-A", key, digest, body, apply) }()
+	for range 8 {
+		wg.Go(func() { ; errs <- r.Receive(ctx, "trusted-A", key, digest, body, apply) })
 	}
 	wg.Wait()
 	close(errs)
