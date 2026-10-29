@@ -1,5 +1,20 @@
 # Changelog
 
+# [0.11.3](https://github.com/goliatone/go-export/compare/v0.11.2...v0.11.3) - (2026-10-29)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.11.3 ([24073f2](https://github.com/goliatone/go-export/commit/24073f2e13f65704470f3767765d1d6bdc23f13a))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.11.2 ([43e9b33](https://github.com/goliatone/go-export/commit/43e9b33130c4ad477caac304b4dbfa15432bb8f3))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update deps ([ea65ee9](https://github.com/goliatone/go-export/commit/ea65ee9e0d3c0a7014ab604e62341bf1da4302e2))  - (goliatone)
+- Code quality ([c24847c](https://github.com/goliatone/go-export/commit/c24847c0629cbee9335d16c986e775279f5ac9c1))  - (goliatone)
+
 # [0.11.2](https://github.com/goliatone/go-export/compare/v0.11.1...v0.11.2) - (2026-10-28)
 
 ## <!-- 13 -->📦 Bumps
