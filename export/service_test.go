@@ -8,6 +8,48 @@ import (
 	"time"
 )
 
+func TestServiceQueuedRetentionUsesRecordCreationTime(t *testing.T) {
+	ctx := t.Context()
+	runner, store, tracker := guardFixture(t)
+	const ttl = 24 * time.Hour
+	runner.Retention = RetentionRules{DefaultTTL: ttl}
+
+	now := time.Date(2026, 11, 25, 12, 0, 0, 0, time.UTC)
+	svc := NewService(ServiceConfig{
+		Runner:  runner,
+		Tracker: tracker,
+		Store:   store,
+		// Advance between reads so resampling after creation moves the cutoff.
+		Now: func() time.Time {
+			now = now.Add(time.Second)
+			return now
+		},
+	})
+	actor := Actor{ID: "actor-1"}
+	queued, err := svc.RequestExport(ctx, actor, ExportRequest{
+		Definition: "resources",
+		Format:     FormatCSV,
+		Delivery:   DeliveryAsync,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := svc.Status(ctx, actor, queued.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := queued.CreatedAt.Add(ttl)
+	for _, record := range []ExportRecord{queued, persisted} {
+		if record.State != StateQueued || !record.CreatedAt.Equal(queued.CreatedAt) {
+			t.Fatalf("queued state or creation time changed: state=%s created=%s", record.State, record.CreatedAt)
+		}
+		if !record.ExpiresAt.Equal(want) || !record.Artifact.Meta.ExpiresAt.Equal(want) {
+			t.Fatalf("queued expiry = %s, artifact expiry = %s, want %s", record.ExpiresAt, record.Artifact.Meta.ExpiresAt, want)
+		}
+	}
+}
+
 func TestService_DeleteExport_TombstoneStrategy(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)

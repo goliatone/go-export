@@ -103,6 +103,8 @@ func TestChromiumEngine_Render_Smoke(t *testing.T) {
 		},
 	}
 
+	t.Cleanup(func() { _ = engine.Close() })
+
 	pdf, err := engine.Render(context.Background(), RenderRequest{
 		HTML: []byte("<html><body><h1>Hello</h1></body></html>"),
 		Options: export.RenderOptions{
@@ -163,5 +165,15 @@ func TestChromiumEngine_Render_BlocksExternalAssets(t *testing.T) {
 
 	if atomic.LoadInt32(&hits) != 0 {
 		t.Fatalf("expected external assets to be blocked, got %d request(s)", hits)
+	}
+}
+
+func TestChromiumEngine_Render_Cancelled(t *testing.T) {
+	engine := &ChromiumEngine{BrowserPath: chromeBinaryPath(t), Headless: true, Timeout: time.Second}
+	t.Cleanup(func() { _ = engine.Close() })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := engine.Render(ctx, RenderRequest{HTML: []byte("<html><body>cancelled</body></html>")}); err == nil {
+		t.Fatal("cancelled render succeeded")
 	}
 }

@@ -63,7 +63,7 @@ Arbitrary Group labels remain separate from `Scope`'s tenant/workspace fields. H
 
 Choose an application-owned projection and de-identification policy. The scoped fixture demonstrates redaction and literal spreadsheet text through existing transformers; CSV quoting alone does not neutralize formulas. HTTP error responses use go-errors' public representation. Operational activity needs a trusted Group projector and remains best effort, without delivery or compliance guarantees.
 
-See [the Group A/B SQL/HTTP fixture](tests/scopedexport/README.md) and the recorded workspace in `evidence/go-export`. The nested integration module is run separately from root tests; its exact dependency snapshots identify the verified composition.
+See [the Group A/B SQL/HTTP fixture](tests/scopedexport/README.md) for the independently locked published composition. Run the nested integration module separately from root tests.
 
 ### Datagrid Client Helper
 
@@ -373,3 +373,22 @@ The native replay service's optional `OnQueued` hook runs after a new async reco
 Keep using the existing request/generate commands, native generation task and webhook task described above. Reconstruct current trusted initiating identity and Group context in workers; persisted actor/plan claims do not authenticate execution. Transaction authorization must use the supplied transaction or verified host fence, including ownership reads, without opening nested writes or borrowing a second connection. Select, authorization and publication callbacks must not commit or perform network I/O. Bind rejects an existing hook owner or another Bun database; postcommit activity remains outside the outbox guarantee.
 
 The new plan/publication table joins the existing export/replay/queue/target tables in one backup and retention boundary. Existing completed records are reused without automatic hook/backfill execution. Existing queued records missing a retained plan fail publication closed under this composition; explicitly drain them with the prior service or adopt a reviewed plan by calling the publisher's OnQueued hook inside an authorized transaction before generation. Do not silently invent plans from current configuration or rerun published notifications. Endpoint/credential migrations, orphan file reclamation, receiver receipt retention, recurring cron occurrences, nontransactional effects and deployment policy remain explicit operational work. The receiver-side idempotency contract is unchanged.
+
+## Web host and standalone adapter qualification
+
+The demo in `examples/web` selects Fiber v3.6.1 and published go-router v0.65.3. Logger/CORS middleware is registered through the owned native registrar before routes. Managed hosting reports the actual address only after `Serving`, drains admitted HTTP and streamed responses while sealing task admission, cancelling export/delivery work and joining inbox readers. SIGINT/SIGTERM use a ten-second shutdown budget; renderer resources and command subscriptions close after successful work completion. This demo uses a static actor and NoOpGuard; deployable authorization remains a host responsibility.
+
+```sh
+export GOWORK=off GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org
+export GOPRIVATE= GONOPROXY= GONOSUMDB=
+export CC=/usr/bin/clang CXX=/usr/bin/clang++
+go mod verify
+go test -mod=readonly -race -count=1 ./...
+# Set CHROME_BIN to a local Chrome/Chromium binary to include PDF integration tests.
+cd examples/web
+HOST=127.0.0.1 PORT=8080 EXPORT_NOTIFY_CHANNELS=inbox go run .
+```
+
+Run `go test -mod=readonly -race -count=1 ./...` independently in `adapters/template/go-template` and `tests/scopedexport`; the root suite excludes both nested modules. The template adapter uses published go-export v0.11.3/go-template v0.3.1 with no replacements. Its verified contract is buffered named-template rendering, JSON-tag projection, escaping, row limits, cancellation and renderer/writer errors. The scoped fixture verifies trusted Group composition against published modules. No workspace or local provider substitutions are required.
+
+The complete Fiber v2.52.13 rollback retains managed hosting, task/socket ownership and fixes; it changes the native imports, view initializer, adapter constructor, middleware registrar and CORS/listen configuration together. Preserve its matching manifests and tests from the adoption evidence rather than swapping a module version alone. Retained v2 library/test edges belong to the coordinated compatibility retirement, not an active v2 demo host.
