@@ -545,7 +545,7 @@ func (s *service) requestAsync(ctx context.Context, actor Actor, resolved Resolv
 			return ExportRecord{}, AsGoError(err)
 		}
 		if ttl > 0 {
-			record.ExpiresAt = s.now().Add(ttl)
+			record.ExpiresAt = record.CreatedAt.Add(ttl)
 			record.Artifact.Meta.ExpiresAt = record.ExpiresAt
 		}
 	}
