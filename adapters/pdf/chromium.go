@@ -64,19 +64,18 @@ func (e *ChromiumEngine) Render(ctx context.Context, req RenderRequest) ([]byte,
 	tabCtx, cancel := chromedp.NewContext(e.browserCtx)
 	defer cancel()
 
-	execCtx := tabCtx
-	if ctx != nil {
-		var cancelReq context.CancelFunc
-		execCtx, cancelReq = context.WithCancel(tabCtx)
-		defer cancelReq()
-		go func() {
-			select {
-			case <-ctx.Done():
-				cancelReq()
-			case <-execCtx.Done():
-			}
-		}()
-	}
+	// Keep the cancellation bridge immutable and join it before releasing the tab.
+	execCtx, cancelReq := context.WithCancel(tabCtx)
+	bridgeDone := make(chan struct{})
+	go func(requestCtx context.Context) {
+		defer close(bridgeDone)
+		select {
+		case <-ctx.Done():
+			cancelReq()
+		case <-requestCtx.Done():
+		}
+	}(execCtx)
+	defer func() { cancelReq(); <-bridgeDone }()
 	if e.Timeout > 0 {
 		var cancelTimeout context.CancelFunc
 		execCtx, cancelTimeout = context.WithTimeout(execCtx, e.Timeout)
