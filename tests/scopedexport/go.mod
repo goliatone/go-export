@@ -3,7 +3,7 @@ module example.com/guarded-scoped-export-verification
 go 1.27.2
 
 require (
-	github.com/goliatone/go-export v0.11.2
+	github.com/goliatone/go-export v0.11.3
 	github.com/goliatone/go-users v0.27.6
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.34
@@ -45,17 +45,16 @@ require (
 	github.com/goliatone/go-auth v0.45.6 // indirect
 	github.com/goliatone/go-composite-fs v0.3.0 // indirect
 	github.com/goliatone/go-errors v0.12.0 // indirect
-	github.com/goliatone/go-featuregate v0.6.1 // indirect
+	github.com/goliatone/go-featuregate v0.6.3 // indirect
 	github.com/goliatone/go-i18n v0.5.0 // indirect
 	github.com/goliatone/go-logger v0.10.1 // indirect
 	github.com/goliatone/go-masker v0.2.0 // indirect
 	github.com/goliatone/go-print v0.4.1 // indirect
 	github.com/goliatone/go-repository-bun v0.16.2 // indirect
-	github.com/goliatone/go-router v0.63.3 // indirect
+	github.com/goliatone/go-router v0.65.3 // indirect
 	github.com/goliatone/go-slug v0.1.0 // indirect
 	github.com/goliatone/hashid v0.2.3 // indirect
 	github.com/goodsign/monday v1.0.2 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
@@ -85,7 +84,7 @@ require (
 	github.com/xuri/nfp v0.0.0-20230919160717-d98342af3f05 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

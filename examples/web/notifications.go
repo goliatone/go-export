@@ -259,10 +259,10 @@ type notifyingService struct {
 	logger   *SimpleLogger
 	linkTTL  time.Duration
 	now      func() time.Time
-	baseURL  string
+	baseURL  func() string
 }
 
-func newNotifyingService(base export.Service, store export.ArtifactStore, notifier notify.ExportReadyNotifier, cfg config.NotificationConfig, logger *SimpleLogger, baseURL string) export.Service {
+func newNotifyingService(base export.Service, store export.ArtifactStore, notifier notify.ExportReadyNotifier, cfg config.NotificationConfig, logger *SimpleLogger, baseURL func() string) export.Service {
 	if base == nil {
 		return nil
 	}
@@ -274,7 +274,7 @@ func newNotifyingService(base export.Service, store export.ArtifactStore, notifi
 		logger:   logger,
 		linkTTL:  notifyLinkTTL,
 		now:      time.Now,
-		baseURL:  strings.TrimRight(strings.TrimSpace(baseURL), "/"),
+		baseURL:  baseURL,
 	}
 }
 
@@ -447,7 +447,8 @@ func (s *notifyingService) resolveDownloadLink(ctx context.Context, key, exportI
 			link = strings.TrimSpace(signed)
 		}
 	}
-	if s.baseURL == "" {
+	baseURL := strings.TrimRight(strings.TrimSpace(s.baseURL()), "/")
+	if baseURL == "" {
 		return link
 	}
 	if strings.HasPrefix(link, "http://") || strings.HasPrefix(link, "https://") {
@@ -456,7 +457,7 @@ func (s *notifyingService) resolveDownloadLink(ctx context.Context, key, exportI
 	if exportID == "" {
 		return link
 	}
-	return fmt.Sprintf("%s/admin/exports/%s/download", s.baseURL, exportID)
+	return fmt.Sprintf("%s/admin/exports/%s/download", baseURL, exportID)
 }
 
 func (s *notifyingService) logNotifySkip(message string) {
@@ -644,9 +645,7 @@ func (a *App) maybeSendDemoNotification(ctx context.Context) {
 		ctx = context.Background()
 	}
 	format := export.NormalizeFormat(export.Format(a.Config.Export.DefaultFormat))
-	go func() {
-		demoCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancel()
+	err := a.tasks.start(2*time.Minute, func(demoCtx context.Context) {
 
 		req := exportdelivery.Request{
 			Actor: a.getActor(),
@@ -675,7 +674,10 @@ func (a *App) maybeSendDemoNotification(ctx context.Context) {
 			return
 		}
 		a.Logger.Info("demo export notification sent via go-notifications")
-	}()
+	})
+	if err != nil {
+		a.Logger.Error("demo notification admission failed", "error", err)
+	}
 }
 
 type logEmailSender struct {

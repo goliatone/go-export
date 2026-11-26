@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -193,42 +192,9 @@ func run() error {
 	app.SetupRoutes(srv.Router())
 
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
-	log.Printf("Starting server on http://%s", addr)
-	log.Printf("Export API: http://%s/admin/exports", addr)
-	log.Printf("Export History: http://%s/admin/exports/history", addr)
-	log.Printf("Demo UI: http://%s/", addr)
-	log.Printf("Formats: csv, json, ndjson, xlsx, sqlite (template/pdf optional)")
 	shutdown, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	return serve(shutdown, app, srv, addr, 10*time.Second)
-}
-
-func serve(ctx context.Context, app *App, srv router.Server[*fiber.App], addr string, timeout time.Duration) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	done := make(chan error, 1)
-	go func() { done <- srv.Serve(addr) }()
-	select {
-	case err := <-done:
-		return err
-	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		var socketErr error
-		if app != nil {
-			socketErr = app.InboxHub.Shutdown(shutdownCtx)
-		}
-		if err := errors.Join(socketErr, srv.Shutdown(shutdownCtx)); err != nil {
-			return err
-		}
-		select {
-		case err := <-done:
-			return err
-		case <-shutdownCtx.Done():
-			return shutdownCtx.Err()
-		}
-	}
 }
 
 func splitCSV(value string) []string {
@@ -248,7 +214,7 @@ func buildServer(app *App) (router.Server[*fiber.App], error) {
 	// Create view engine
 	viewCfg := router.NewSimpleViewConfig("./views").
 		WithExt(".html").
-		WithReload(true).
+		WithReload(false).
 		WithDebug(true).
 		WithFunctions(templateFunctions())
 
@@ -259,9 +225,18 @@ func buildServer(app *App) (router.Server[*fiber.App], error) {
 
 	// Create Fiber adapter
 	srv := router.NewFiberV3AdapterWithConfig(router.FiberV3AdapterConfig{
-		ListenConfig: fiber.ListenConfig{EnablePrintRoutes: true},
+		ListenConfig: fiber.ListenConfig{DisableStartupMessage: true},
 	}, fiberAppInitializer(engine))
 
+	native, ok := srv.(router.FiberV3NativeMiddlewareRegistrar)
+	if !ok {
+		return nil, fmt.Errorf("owned native middleware unavailable")
+	}
+	if err := native.UseNative(logger.New(logger.Config{Format: "[${time}] ${status} ${method} ${path} ${latency}\n"}), cors.New(cors.Config{
+		AllowOrigins: []string{"*"}, AllowMethods: []string{"GET", "POST", "DELETE", "PATCH", "OPTIONS"}, AllowHeaders: []string{"Content-Type", "Authorization", "X-Idempotency-Key"},
+	})); err != nil {
+		return nil, err
+	}
 	return srv, nil
 }
 
@@ -272,16 +247,6 @@ func fiberAppInitializer(engine fiber.Views) func(*fiber.App) *fiber.App {
 			PassLocalsToViews: true,
 			Views:             engine,
 		})
-
-		// Add middleware
-		fiberApp.Use(logger.New(logger.Config{
-			Format: "[${time}] ${status} ${method} ${path} ${latency}\n",
-		}))
-		fiberApp.Use(cors.New(cors.Config{
-			AllowOrigins: []string{"*"},
-			AllowMethods: []string{"GET", "POST", "DELETE", "PATCH", "OPTIONS"},
-			AllowHeaders: []string{"Content-Type", "Authorization", "X-Idempotency-Key"},
-		}))
 
 		return fiberApp
 	}

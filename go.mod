@@ -7,12 +7,12 @@ require (
 	github.com/chromedp/chromedp v0.15.1
 	github.com/flosch/pongo2/v6 v6.1.0
 	github.com/gofiber/fiber/v3 v3.6.1
-	github.com/goliatone/go-command v0.24.3
+	github.com/goliatone/go-command v0.27.1
 	github.com/goliatone/go-errors v0.12.0
 	github.com/goliatone/go-i18n v0.5.0
 	github.com/goliatone/go-job v0.20.0
 	github.com/goliatone/go-notifications v0.16.4
-	github.com/goliatone/go-router v0.63.3
+	github.com/goliatone/go-router v0.65.3
 	github.com/goliatone/go-users v0.27.6
 	github.com/google/uuid v1.6.0
 	github.com/uptrace/bun v1.2.18
@@ -28,7 +28,7 @@ require (
 	github.com/gofiber/schema v1.9.0 // indirect
 	github.com/gofiber/template/v2 v2.1.4 // indirect
 	github.com/gofiber/utils/v2 v2.6.2 // indirect
-	github.com/goliatone/go-featuregate v0.6.1 // indirect
+	github.com/goliatone/go-featuregate v0.6.3 // indirect
 	github.com/goliatone/go-slug v0.1.0 // indirect
 	github.com/molecule-man/go-brrr v1.3.0 // indirect
 	github.com/philhofer/fwd v1.2.1 // indirect
@@ -110,7 +110,7 @@ require (
 	github.com/showa-93/go-mask v0.6.2 // indirect
 	github.com/ssor/bom v0.0.0-20170718123548-6386211fdfcf // indirect
 	github.com/stretchr/objx v0.8.0 // indirect
-	github.com/stretchr/testify v1.12.1 // indirect
+	github.com/stretchr/testify v1.12.1
 	github.com/tmthrgd/go-hex v0.0.0-20190904060850-447a3041c3bc // indirect
 	github.com/uptrace/bun/dbfixture v1.2.18 // indirect
 	github.com/uptrace/bun/extra/bundebug v1.2.18 // indirect

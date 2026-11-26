@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flosch/pongo2/v6"
@@ -47,6 +48,11 @@ type App struct {
 	Inbox             *inbox.Service
 	InboxHub          *inboxHub
 	subscriptions     []dispatcher.Subscription
+	tasks             *taskOwner
+	closeOnce         sync.Once
+	closeErr          error
+	baseURL           *atomic.Pointer[string]
+	hostDone          <-chan struct{}
 }
 
 // NewApp creates and initializes the application.
@@ -110,7 +116,9 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		CancelHook:     cancelRegistry,
 	})
 	service := baseService
-	baseURL := buildServerBaseURL(cfg.Server)
+	baseURL := &atomic.Pointer[string]{}
+	initialURL := buildServerBaseURL(cfg.Server)
+	baseURL.Store(&initialURL)
 
 	if cfg.Export.Notifications.Enabled && len(cfg.Export.Notifications.Recipients) == 0 {
 		cfg.Export.Notifications.Recipients = []string{defaultDemoEmail()}
@@ -134,7 +142,7 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 			inboxHub.SetInbox(inboxSvc)
 		}
 		if notifier != nil {
-			service = newNotifyingService(service, store, notifier, cfg.Export.Notifications, logger, baseURL)
+			service = newNotifyingService(service, store, notifier, cfg.Export.Notifications, logger, func() string { return *baseURL.Load() })
 		}
 	}
 
@@ -152,23 +160,17 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		// Dispatch defaults to dispatcher.Dispatch
 	})
 
+	tasks := newTaskOwner()
 	// Create scheduler with demo enqueuer that runs task in a goroutine
 	// NOTE: In production, use a real job runner (e.g., go-job worker pool, Redis queue, etc.)
 	var scheduler *exportjob.Scheduler
 	if cfg.Export.EnableAsync {
 		enqueuer := exportjob.EnqueuerFunc(func(ctx context.Context, msg *gojob.ExecutionMessage) error {
-			go func() {
-				const asyncExportTimeout = 10 * time.Minute
-				// Demo safeguard: allow background exports to finish, but bound runtime.
-				// In production, prefer a job runner with request-scoped cancellation/timeouts.
-				execCtx, cancel := context.WithTimeout(context.Background(), asyncExportTimeout)
-				defer cancel()
-
+			return tasks.start(10*time.Minute, func(execCtx context.Context) {
 				if err := generateTask.Execute(execCtx, msg); err != nil {
 					logger.Error("async export task failed", "error", err)
 				}
-			}()
-			return nil
+			})
 		})
 
 		scheduler = exportjob.NewScheduler(exportjob.Config{
@@ -179,7 +181,6 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		})
 	}
 
-	normalizedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	delivery := exportdelivery.NewService(exportdelivery.Config{
 		Service:     baseService,
 		Store:       store,
@@ -188,6 +189,7 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		Notifier:    notifier,
 		LinkBuilder: func(exportID string, ref export.ArtifactRef) string {
 			_ = ref
+			normalizedBaseURL := strings.TrimRight(*baseURL.Load(), "/")
 			if normalizedBaseURL == "" || exportID == "" {
 				return ""
 			}
@@ -203,7 +205,7 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		Logger: logger,
 	})
 	deliveryScheduler := exportdelivery.NewScheduler(exportdelivery.SchedulerConfig{
-		Enqueuer: deliveryEnqueuer{task: deliveryTask, logger: logger},
+		Enqueuer: deliveryEnqueuer{task: deliveryTask, logger: logger, tasks: tasks},
 		Logger:   logger,
 	})
 
@@ -224,19 +226,41 @@ func NewApp(ctx context.Context, cfg config.Config) (*App, error) {
 		Inbox:             inboxSvc,
 		InboxHub:          inboxHub,
 		subscriptions:     subscriptions,
+		tasks:             tasks,
+		baseURL:           baseURL,
 	}
-
-	app.maybeSendDemoNotification(ctx)
 
 	return app, nil
 }
 
 // Close releases app resources.
 func (a *App) Close() error {
-	for _, sub := range a.subscriptions {
-		sub.Unsubscribe()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	// Native handlers can outlive a failed drain. Keep their dependencies alive.
+	if a.hostDone != nil {
+		select {
+		case <-a.hostDone:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
-	return nil
+	if err := a.Shutdown(ctx); err != nil {
+		return err
+	}
+	a.closeOnce.Do(func() {
+		if renderer, ok := a.Runner.Renderers.Resolve(export.FormatPDF); ok {
+			if pdf, ok := renderer.(exportpdf.Renderer); ok {
+				if closer, ok := pdf.Engine.(io.Closer); ok {
+					a.closeErr = closer.Close()
+				}
+			}
+		}
+		for _, sub := range a.subscriptions {
+			sub.Unsubscribe()
+		}
+	})
+	return a.closeErr
 }
 
 // SimpleLogger is a basic logger implementation.
@@ -288,6 +312,7 @@ func defaultDemoEmail() string {
 type deliveryEnqueuer struct {
 	task   *exportdelivery.Task
 	logger *SimpleLogger
+	tasks  *taskOwner
 }
 
 func (e deliveryEnqueuer) Enqueue(ctx context.Context, msg *gojob.ExecutionMessage) error {
@@ -295,15 +320,11 @@ func (e deliveryEnqueuer) Enqueue(ctx context.Context, msg *gojob.ExecutionMessa
 	if e.task == nil {
 		return export.NewError(export.KindInternal, "delivery task is nil", nil)
 	}
-	go func() {
-		const asyncDeliveryTimeout = 5 * time.Minute
-		execCtx, cancel := context.WithTimeout(context.Background(), asyncDeliveryTimeout)
-		defer cancel()
+	return e.tasks.start(5*time.Minute, func(execCtx context.Context) {
 		if err := e.task.Execute(execCtx, msg); err != nil && e.logger != nil {
 			e.logger.Error("async delivery task failed", "error", err)
 		}
-	}()
-	return nil
+	})
 }
 
 // NoOpGuard allows all operations.

@@ -8,21 +8,25 @@ import (
 
 	"github.com/goliatone/go-notifications/pkg/inbox"
 	"github.com/goliatone/go-notifications/pkg/interfaces/broadcaster"
+	"github.com/goliatone/go-notifications/pkg/privacy"
 	"github.com/goliatone/go-router"
 )
 
 type inboxHub struct {
-	mu       sync.RWMutex
-	clients  map[string]map[string]*inboxClient
-	inbox    *inbox.Service
-	logger   *SimpleLogger
-	stopping bool
-	readers  sync.WaitGroup
+	mu           sync.RWMutex
+	clients      map[string]map[string]*inboxClient
+	inbox        *inbox.Service
+	logger       *SimpleLogger
+	stopping     bool
+	readers      sync.WaitGroup
+	shutdownOnce sync.Once
+	shutdownDone chan struct{}
 }
 
 type inboxClient struct {
-	conn router.WebSocketContext
-	mu   sync.Mutex
+	conn   router.WebSocketContext
+	mu     sync.Mutex
+	closed bool
 }
 
 type inboxRealtimeMessage struct {
@@ -33,8 +37,9 @@ type inboxRealtimeMessage struct {
 
 func newInboxHub(logger *SimpleLogger) *inboxHub {
 	return &inboxHub{
-		clients: make(map[string]map[string]*inboxClient),
-		logger:  logger,
+		clients:      make(map[string]map[string]*inboxClient),
+		shutdownDone: make(chan struct{}),
+		logger:       logger,
 	}
 }
 
@@ -53,6 +58,9 @@ func (h *inboxHub) Add(userID string, conn router.WebSocketContext) *inboxClient
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
+		return nil
+	}
+	if _, ok := conn.(router.WebSocketReadInterrupter); !ok {
 		return nil
 	}
 	client := &inboxClient{conn: conn}
@@ -89,7 +97,21 @@ func (h *inboxHub) Broadcast(ctx context.Context, event broadcaster.Event) error
 	}
 	userID := inboxUserIDFromPayload(event.Payload)
 	if userID == "" {
-		h.logf("inbox broadcast skipped: missing user_id topic=%s", event.Topic)
+		if payload, ok := event.Payload.(map[string]any); ok {
+			if subject, ok := payload["subject_id"].(string); ok && subject != "" {
+				h.mu.RLock()
+				for connectedUser := range h.clients {
+					if (privacy.DefaultPolicy{}).SafeSubjectID(connectedUser) == subject {
+						userID = connectedUser
+						break
+					}
+				}
+				h.mu.RUnlock()
+			}
+		}
+	}
+	if userID == "" {
+		h.logf("inbox broadcast skipped: no connected recipient topic=%s", event.Topic)
 		return nil
 	}
 
@@ -114,8 +136,7 @@ func (h *inboxHub) broadcastToUser(userID string, msg inboxRealtimeMessage) erro
 			if firstErr == nil {
 				firstErr = err
 			}
-			interruptInboxRead(client.conn)
-			h.removeConn(userID, client.conn.ConnectionID())
+			client.interrupt()
 		}
 	}
 	return firstErr
@@ -149,6 +170,11 @@ func (h *inboxHub) removeConn(userID, connID string) {
 	if !ok {
 		return
 	}
+	if client := userConns[connID]; client != nil {
+		client.mu.Lock()
+		client.closed = true
+		client.mu.Unlock()
+	}
 	delete(userConns, connID)
 	if len(userConns) == 0 {
 		delete(h.clients, userID)
@@ -179,6 +205,9 @@ func (c *inboxClient) writeJSON(v any) error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.closed {
+		return nil
+	}
 	return c.conn.WriteJSON(v)
 }
 
@@ -212,32 +241,40 @@ func (h *inboxHub) Shutdown(ctx context.Context) error {
 	if h == nil {
 		return nil
 	}
-	h.mu.Lock()
-	h.stopping = true
-	var clients []*inboxClient
-	for _, connections := range h.clients {
-		for _, client := range connections {
-			clients = append(clients, client)
+	h.shutdownOnce.Do(func() {
+		h.mu.Lock()
+		h.stopping = true
+		var clients []*inboxClient
+		for _, connections := range h.clients {
+			for _, client := range connections {
+				clients = append(clients, client)
+			}
 		}
-	}
-	h.mu.Unlock()
-	for _, client := range clients {
-		interruptInboxRead(client.conn)
-	}
-	done := make(chan struct{})
-	go func() { h.readers.Wait(); close(done) }()
+		h.mu.Unlock()
+		go func() {
+			for _, client := range clients {
+				client.interrupt()
+			}
+			h.readers.Wait()
+			close(h.shutdownDone)
+		}()
+	})
 	select {
-	case <-done:
+	case <-h.shutdownDone:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-func interruptInboxRead(conn router.WebSocketContext) {
-	if interrupter, ok := conn.(router.WebSocketReadInterrupter); ok {
-		_ = interrupter.InterruptRead()
-	} else {
-		_ = conn.Close()
+// Serialize with retirement so snapshots never touch a recycled native context.
+func (c *inboxClient) interrupt() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return
+	}
+	if reader, ok := c.conn.(router.WebSocketReadInterrupter); ok {
+		_ = reader.InterruptRead()
 	}
 }

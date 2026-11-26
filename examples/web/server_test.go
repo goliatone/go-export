@@ -285,6 +285,7 @@ func waitForServer(t *testing.T, client *http.Client, url string, done <-chan er
 	for {
 		res, err := client.Get(url)
 		if err == nil {
+			_, _ = io.Copy(io.Discard, res.Body)
 			res.Body.Close()
 			if res.StatusCode == 200 {
 				return

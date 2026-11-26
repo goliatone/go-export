@@ -675,6 +675,12 @@
             return payload;
         }
 
+        function publicError(payload, fallback) {
+            const error = payload && payload.error;
+            const message = typeof error === 'string' ? error : error && error.message;
+            return typeof message === 'string' && message.trim() ? message.slice(0, 512) : fallback;
+        }
+
         function triggerExport() {
             const statusEl = document.getElementById('exportStatus');
             const btn = document.getElementById('exportBtn');
@@ -695,7 +701,7 @@
                     return response.json().then(data => ({ async: true, data }));
                 }
                 if (!response.ok) {
-                    return response.json().then(err => { throw new Error(err.error || 'Export failed'); });
+                    return response.json().then(err => { throw new Error(publicError(err, 'Export failed')); });
                 }
                 const exportId = response.headers.get('X-Export-Id');
                 return response.blob().then(blob => ({ async: false, blob, exportId }));
@@ -764,7 +770,7 @@
             })
             .then(response => response.json().then(data => {
                 if (!response.ok) {
-                    throw new Error(data.error || 'Schedule failed');
+                    throw new Error(publicError(data, 'Schedule failed'));
                 }
                 return data;
             }))
@@ -890,7 +896,7 @@
                     container.innerHTML = html;
                 })
                 .catch(error => {
-                    container.innerHTML = `<div class="empty-state">Error loading history: ${error.message}</div>`;
+                    container.innerHTML = `<div class="empty-state">Error loading history: ${escapeHTML(error.message)}</div>`;
                 });
         }
 
@@ -1016,7 +1022,7 @@
                     container.innerHTML = html;
                 })
                 .catch(error => {
-                    container.innerHTML = `<div class="empty-state">${error.message}</div>`;
+                    container.innerHTML = `<div class="empty-state">${escapeHTML(error.message)}</div>`;
                 });
         }
 
@@ -1049,7 +1055,7 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    return response.json().then(err => { throw new Error(err.error || 'Update failed'); });
+                    return response.json().then(err => { throw new Error(publicError(err, 'Update failed')); });
                 }
                 refreshInboxSoon();
             })
@@ -1062,7 +1068,7 @@
             fetch(`/api/inbox/${id}`, { method: 'DELETE' })
                 .then(response => {
                     if (!response.ok) {
-                        return response.json().then(err => { throw new Error(err.error || 'Dismiss failed'); });
+                        return response.json().then(err => { throw new Error(publicError(err, 'Dismiss failed')); });
                     }
                     refreshInboxSoon();
                 })
