@@ -1,5 +1,24 @@
 # Changelog
 
+# [0.11.4](https://github.com/goliatone/go-export/compare/v0.11.3...v0.11.4) - (2026-11-26)
+
+## <!-- 1 -->🐛 Bug Fixes
+
+- Chromium pdf generator ([08ef790](https://github.com/goliatone/go-export/commit/08ef790fd1358f7b6c22cdd6da586b286c882bde))  - (goliatone)
+- Use record created at for expire ([29cd58b](https://github.com/goliatone/go-export/commit/29cd58bd294569432270754f1a69f1861469e2a6))  - (goliatone)
+
+## <!-- 13 -->📦 Bumps
+
+- Bump version: v0.11.4 ([2e452e0](https://github.com/goliatone/go-export/commit/2e452e062f1fe1e7d1a54f174d8d6aaa82f35106))  - (goliatone)
+
+## <!-- 3 -->📚 Documentation
+
+- Update changelog for v0.11.3 ([5069003](https://github.com/goliatone/go-export/commit/50690030cdad9ce671d536b1f839a3b3931d2d77))  - (goliatone)
+
+## <!-- 7 -->⚙️ Miscellaneous Tasks
+
+- Update examples, tests, and deps ([2b29b12](https://github.com/goliatone/go-export/commit/2b29b1263f8eb298e7cfa723e5569cd832e9030a))  - (goliatone)
+
 # [0.11.3](https://github.com/goliatone/go-export/compare/v0.11.2...v0.11.3) - (2026-10-29)
 
 ## <!-- 13 -->📦 Bumps
